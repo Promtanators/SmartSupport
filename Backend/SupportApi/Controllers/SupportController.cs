@@ -2,6 +2,8 @@ using System.Text.Json;
 using SupportApi.Data;
 using SupportApi.Models.Dto;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis.Recommendations;
+using SupportApi.Models.Entities;
 
 namespace SupportApi.Controllers;
 
@@ -22,14 +24,19 @@ public class SupportController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskDto dto)
     {
-        var response = new ResponseDto(["Тестовый ответ1", "тестовый ответ2"]);
+        var gen = new RecommendationsGenerator(_db.BankFaqs);
+        var recommendations = await gen.GetRecommendations(dto.Message);
+        var response = new ResponseDto(recommendations);
+        
         return await Task.FromResult(Ok(response));
     }
 
     [HttpGet("all")]
-    public IActionResult GetAll()
+    public async Task<IActionResult> GetAll()
     {
         var faqs = _db.BankFaqs.ToList();
+        var gen = new RecommendationsGenerator(_db.BankFaqs);
+        var recommendations = await gen.GetRecommendations("Как стать клиентом банка онлайн?");
         return Ok(faqs);
     }
 }

@@ -10,7 +10,7 @@ public class SciBoxClient
     private const string ModelNameQwen = "Qwen2.5-72B-Instruct-AWQ";
     private const string ModelNameBge = "bge-m3";
     
-    private const double Temperature = 0.7;
+    private const double Temperature = 0.1;
     private const double TopProbability = 0.9;
     private const int MaxTokens = 500;
 
