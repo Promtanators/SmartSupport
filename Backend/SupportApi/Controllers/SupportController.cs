@@ -22,7 +22,14 @@ public class SupportController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskDto dto)
     {
-        var response = new ResponseDto(["Подсказка 1", "Подсказка 2"]);
+        var response = new ResponseDto(["Тестовый ответ1", "тестовый ответ2"]);
         return await Task.FromResult(Ok(response));
+    }
+
+    [HttpGet("all")]
+    public IActionResult GetAll()
+    {
+        var faqs = _db.BankFaqs.ToList();
+        return Ok(faqs);
     }
 }
