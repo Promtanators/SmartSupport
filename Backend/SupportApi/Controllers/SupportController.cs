@@ -22,14 +22,7 @@ public class SupportController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskDto dto)
     {
-        var response = new ResponseDto(["Тестовый ответ1", "тестовый ответ2"]);
+        var response = new ResponseDto(["Подсказка 1", "Подсказка 2"]);
         return await Task.FromResult(Ok(response));
-    }
-
-    [HttpGet("models")]
-    public async Task<IActionResult> Models()
-    {
-        var models = new[] { ModelNameQwen};
-        return await Task.FromResult(Ok(models));
     }
 }
