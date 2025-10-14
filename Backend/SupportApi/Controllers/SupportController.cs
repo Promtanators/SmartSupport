@@ -29,7 +29,14 @@ public class SupportController : ControllerBase
     [HttpGet("models")]
     public async Task<IActionResult> Models()
     {
-        var models = new[] { ModelNameQwen};
+        var models = new[] { ModelNameQwen };
         return await Task.FromResult(Ok(models));
+    }
+    
+    [HttpGet("all")]
+    public IActionResult GetAll()
+    {
+        var faqs = _db.BankFaqs.ToList();
+        return Ok(faqs);
     }
 }
