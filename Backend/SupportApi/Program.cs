@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupportApi;
 using SupportApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,4 +21,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+
+
+var TOKEN = Environment.GetEnvironmentVariable("SCIBOX_API_KEY")
+    ?? throw new InvalidOperationException("❌ Environment variable SCIBOX_API_KEY is not set.");
+// setx SCIBOX_API_KEY "TOKEN" - Windows
+// export SCIBOX_API_KEY="TOKEN" - Linux/macOS
+
 app.Run();
+
+
