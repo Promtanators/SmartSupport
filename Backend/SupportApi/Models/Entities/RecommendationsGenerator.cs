@@ -39,13 +39,42 @@ public class RecommendationsGenerator
                                       " что-то из второго списка, TargetAudience: что-то из третьего списка}. Вот списки: "
                                       + mainCategoriesString + "|" + subCategoriesString + "|" + targetAudiencesString, message);
         var jsonAnswer = JsonDocument.Parse(answer);
-        listRecommendations[0] = jsonAnswer.RootElement.GetProperty("MainCategory").GetString();
-        listRecommendations[1] = jsonAnswer.RootElement.GetProperty("SubCategory").GetString();
-        listRecommendations[2] = jsonAnswer.RootElement.GetProperty("TargetAudience").GetString();
+        listRecommendations.Add(jsonAnswer.RootElement.GetProperty("MainCategory").GetString());
+        listRecommendations.Add(jsonAnswer.RootElement.GetProperty("SubCategory").GetString());
+        listRecommendations.Add(jsonAnswer.RootElement.GetProperty("TargetAudience").GetString());
         if (listRecommendations.Contains("-"))
         {
             listRecommendations.Add("Ответ не найден в базе знаний");
         }
         return listRecommendations;
+    }
+
+    public async Task<List<string>> GetAnswers(List<string> listRecommendations, string message)
+    {
+        var result = await _bankFaqs.Where(b => b.MainCategory == listRecommendations[0]
+                                                && b.Subcategory == listRecommendations[1] 
+                                                && b.TargetAudience == listRecommendations[2]).Select(a => a.TemplateResponse).ToListAsync();
+        var token = Environment.GetEnvironmentVariable("SCIBOX_API_KEY") 
+                    ?? throw new InvalidOperationException("Environment variable SCIBOX_API_KEY is not set.");
+        var client = new SciBoxClient(token);
+        string listAnswer = string.Join(",", result);
+        foreach (var res in result)
+        {
+            
+        }
+        var answer = await client.Ask("Выбери самый подходящий ответ или ответы (Если несколько ответов то пропиги их через (|)) из этого списка"+ listAnswer +" на этот вопрос (Если не нашёл ни одного ответа то не придумывай сам а протсо выведи: Ответ не найден в базе знаний)", message);
+        result.Clear();
+        answer.Split("|").ToList().ForEach(a => result.Add(a));
+        if (result[0] == "Ответ не найден в базе знаний")
+        {
+            result.Clear();
+            result = await _bankFaqs.Where(b => b.MainCategory == listRecommendations[0]
+                                                && b.Subcategory == listRecommendations[1]).Select(a => a.TemplateResponse).ToListAsync();
+            listAnswer = string.Join(",", result);
+            answer = await client.Ask("Выбери самый подходящий ответ или ответы (Если несколько ответов то пропиги их через (|)) из этого списка"+ listAnswer +" на этот вопрос (Если не нашёл ни одного ответа то не придумывай сам а протсо выведи: Ответ не найден в базе знаний)", message);
+            result.Clear();
+        }
+        answer.Split("|").ToList().ForEach(a => result.Add(a));
+        return result;
     }
 }

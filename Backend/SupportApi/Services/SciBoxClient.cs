@@ -12,7 +12,7 @@ public class SciBoxClient
     
     private const double Temperature = 0.1;
     private const double TopProbability = 0.9;
-    private const int MaxTokens = 500;
+    private const int MaxTokens = 1000;
 
     private readonly HttpClient _httpClient = new(new HttpClientHandler
     {

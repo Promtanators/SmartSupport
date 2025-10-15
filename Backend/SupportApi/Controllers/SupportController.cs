@@ -36,7 +36,13 @@ public class SupportController : ControllerBase
     {
         var faqs = _db.BankFaqs.ToList();
         var gen = new RecommendationsGenerator(_db.BankFaqs);
-        var recommendations = await gen.GetRecommendations("Как стать клиентом банка онлайн?");
+        var message = "Как оформить карту MORE?";
+        var recommendations = await gen.GetRecommendations(message);
+        var result = gen.GetAnswers(recommendations, message);
+        for(int i = 0; i < result.Result.Count; ++i)
+        {
+            Console.WriteLine(result.Result[i]);
+        }
         return Ok(faqs);
     }
 }
