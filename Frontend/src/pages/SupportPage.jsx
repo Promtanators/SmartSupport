@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { Card, Input, Button, Avatar, Typography, Row, Col, Modal } from "antd";
+import {
+  Card,
+  Input,
+  Button,
+  Avatar,
+  Typography,
+  Row,
+  Col,
+  Modal,
+  Tag,
+} from "antd";
 import {
   SendOutlined,
   UserOutlined,
@@ -7,58 +17,90 @@ import {
   CommentOutlined,
 } from "@ant-design/icons";
 
-const cannedResponses = [
-  { title: "Приветствие", text: "Добрый день! Чем могу помочь?" },
-  {
-    title: "Уточнение",
-    text: "Для вашей безопасности, уточните, пожалуйста, последние 4 цифры номера вашей карты.",
-  },
-  {
-    title: "Инструкция",
-    text: "Выписку за прошлый месяц вы можете найти в мобильном приложении в разделе 'История операций' -> 'Заказать отчет'.",
-  },
-  {
-    title: "Перевод",
-    text: "К сожалению, этот вопрос вне моей компетенции. Перевожу ваш запрос на старшего специалиста.",
-  },
-  {
-    title: "Благодарность",
-    text: "Спасибо за ожидание! Я уточнил информацию по вашему вопросу.",
-  },
-  {
-    title: "Завершение",
-    text: "Рад был помочь! Если у вас появятся другие вопросы, обращайтесь. Всего доброго!",
-  },
-  {
-    title: "Проблема",
-    text: "Не могли бы вы, пожалуйста, описать проблему более подробно?",
-  },
-  {
-    title: "Проверка",
-    text: "Мне потребуется несколько минут, чтобы проверить данные. Пожалуйста, не отключайтесь.",
-  },
-];
+const serverData = {
+  recommendations: [
+    {
+      answer:
+        "Стать клиентом ВТБ (Беларусь) можно онлайн через сайт vtb.by или мобильное приложение VTB mBank. Для регистрации потребуются паспорт и номер телефона. После регистрации через МСИ (Межбанковскую систему идентификации) вы получите доступ к банковским услугам. .",
+      score: 85,
+    },
+    {
+      answer:
+        "МСИ позволяет пройти идентификацию онлайн, используя данные других банков, где вы уже являетесь клиентом. Это упрощает процедуру регистрации и делает её быстрой и безопасной..",
+      score: 97,
+    },
+    {
+      answer:
+        "Для регистрации в качестве нового клиента необходим паспорт гражданина Республики Беларусь и контактный номер мобильного телефона для получения SMS-подтверждений. ",
+      score: 55,
+    },
+    {
+      answer:
+        "Стать клиентом ВТБ (Беларусь) можно онлайн через сайт vtb.by или мобильное приложение VTB mBank. Для регистрации потребуются паспорт и номер телефона. После регистрации через МСИ (Межбанковскую систему идентификации) вы получите доступ к банковским услугам. .",
+      score: 15,
+    },
+    {
+      answer:
+        "После регистрации вы получите логин и пароль для входа в систему Интернет-банк. При первом входе рекомендуется изменить временный пароль на постоянный и настроить дополнительные параметры безопасности. ",
+      score: 78,
+    },
+    {
+      answer:
+        "Мобильное приложение VTB mBank можно скачать в App Store для iOS или Google Play для Android. После установки войдите с логином и паролем от Интернет-банка и пройдите первоначальную настройку.",
+      score: 90,
+    },
+    {
+      answer:
+        "Если не получается войти в Интернет-банк, проверьте правильность ввода логина и пароля. При забытом пароле воспользуйтесь функцией восстановления. Если проблема не решается, обратитесь в контакт-центр по номеру 250 или +375 (17/29/33) 309 15 15. Вы можете получить онлайн-консультацию (в текстовом формате) в будние дни с 9:00 до 17:30, написав специалисту банка в Telegram либо в чат на сайте (ссылки на сайте банка).",
+      score: 77,
+    },
+  ],
+};
+
+const RecommendationCard = ({ recommendation, onClick, isActive }) => {
+  const getTagColor = (score) => {
+    if (score > 80) return "green";
+    if (score > 40) return "gold";
+    return "red";
+  };
+
+  return (
+    <Card
+      size="small"
+      hoverable={isActive}
+      style={{
+        marginBottom: 12,
+        cursor: isActive ? "pointer" : "not-allowed",
+        opacity: isActive ? 1 : 0.6,
+      }}
+      bodyStyle={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+      onClick={isActive ? () => onClick(recommendation.answer) : undefined}
+    >
+      <Typography.Text
+        style={{ flex: 1, paddingRight: "8px" }}
+        type={isActive ? "" : "secondary"}
+      >
+        {recommendation.answer}
+      </Typography.Text>
+      <Tag color={getTagColor(recommendation.score)}>
+        {recommendation.score}%
+      </Tag>
+    </Card>
+  );
+};
 
 export default function SupportOperatorPage({ message }) {
   const [supportInput, setSupportInput] = useState("");
   const [isActive, setIsActive] = useState(true);
-
   const [messages, setMessages] = useState(() =>
     message ? [{ id: Date.now(), text: message, sender: "user" }] : []
   );
-
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const handleModalKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (userInput.trim()) {
-        // Проверяем, что поле не пустое
-        handleSendUserReply();
-      }
-    }
-  };
   const [userInput, setUserInput] = useState("");
-  // для прокрутки к сообщению при отправке
   const messagesEndRef = useRef(null);
 
   const addMessage = (text, sender) => {
@@ -85,6 +127,15 @@ export default function SupportOperatorPage({ message }) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleModalKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (userInput.trim()) {
+        handleSendUserReply();
+      }
     }
   };
 
@@ -175,24 +226,21 @@ export default function SupportOperatorPage({ message }) {
         </Col>
 
         <Col span={7} style={{ height: "100%" }}>
-          <Card title="Шаблоны ответов" style={styles.templateCard}>
-            {cannedResponses.map((res, index) => (
-              <Card
-                key={index}
-                size="small"
-                hoverable
-                style={{
-                  marginBottom: 12,
-                  cursor: isActive ? "pointer" : "not-allowed",
-                  opacity: isActive ? 1 : 0.5,
-                }}
-                onClick={() => isActive && setSupportInput(res.text)}
-              >
-                <Typography.Text strong>{res.title}</Typography.Text>
-                <br />
-                <Typography.Text type="secondary">{res.text}</Typography.Text>
-              </Card>
-            ))}
+          <Card
+            title="Рекомендации"
+            style={styles.templateCard}
+            styles={{ body: { overflowY: "auto", padding: "16px" } }}
+          >
+            {serverData.recommendations
+              .sort((a, b) => b.score - a.score)
+              .map((rec, index) => (
+                <RecommendationCard
+                  key={index}
+                  recommendation={rec}
+                  onClick={setSupportInput}
+                  isActive={isActive}
+                />
+              ))}
           </Card>
         </Col>
       </Row>
@@ -210,9 +258,9 @@ export default function SupportOperatorPage({ message }) {
           placeholder="Введите запрос от лица клиента."
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
+          onKeyDown={handleModalKeyPress}
           autoSize={{ minRows: 3, maxRows: 5 }}
           style={{ marginTop: 16 }}
-          onKeyDown={handleModalKeyPress}
         />
       </Modal>
     </div>
@@ -230,14 +278,13 @@ const styles = {
     height: "100%",
     display: "flex",
     flexDirection: "column",
-    flex: 1,
-    padding: "16px",
   },
   chatCardBody: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
     padding: "16px",
+    overflow: "hidden",
   },
   messageList: { flex: 1, overflowY: "auto", marginBottom: "16px" },
   inputArea: {
@@ -250,9 +297,6 @@ const styles = {
     height: "100%",
     display: "flex",
     flexDirection: "column",
-    flex: 1,
-    overflowY: "auto",
-    padding: "16px",
   },
   messageContainer: { display: "flex", marginBottom: "12px" },
   userAvatar: { marginRight: 8, backgroundColor: "#87d068" },
