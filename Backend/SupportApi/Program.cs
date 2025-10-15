@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using SupportApi;
 using SupportApi.Data;
 using SupportApi.Models.Entities;
 
@@ -9,10 +8,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var loggerFactory = LoggerFactory.Create(builder =>
+var loggerFactory = LoggerFactory.Create(b =>
     {
-        builder.AddConsole();
-        builder.AddDebug();
+        b.AddConsole();
+        b.AddDebug();
     }
 );
 
@@ -21,13 +20,30 @@ var connection = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<SupportDbContext>(options =>
     options.UseSqlite(connection));
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
+
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
+// if (app.Environment.IsDevelopment())
+// {
+//     app.UseSwagger();
+//     app.UseSwaggerUI();
+// }
+
+app.UseCors();
 
 app.MapControllers();
 
@@ -35,5 +51,3 @@ app.MapControllers();
 // export SCIBOX_API_KEY="TOKEN" - Linux/macOS
 
 app.Run();
-
-
