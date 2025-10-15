@@ -1,8 +1,10 @@
 using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using SupportApi.Data;
 using SupportApi.Models.Dto;
+using SupportApi.Models.Entities;
 
 namespace SupportApi.Models.Entities;
 
@@ -32,51 +34,67 @@ public class RecommendationsGenerator
                     .Distinct()
                     .ToList()
             );
-        
-        
-        
-        var targetAudiences = await _bankFaqs
-            .Select(b => b.TargetAudience)
-            .Distinct()
-            .ToListAsync();
-        
-        var mainCategories = categoryTree.Keys.ToList();
-        var subCategories = categoryTree.Values.SelectMany(subs => subs).Distinct().ToList();
 
-        var systemPrompt = _BuildRecommendationPrompt(categoryTree, targetAudiences);
+        var mainCategoryTask = _GetMainCategoryAsync(categoryTree, message);
+        var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
+
+        await Task.WhenAll(mainCategoryTask, messageEmbTask);
+        
+        var mainCategory = mainCategoryTask.Result;
+        var messageEmb = JsonSerializer.Deserialize<double[]>(messageEmbTask.Result);
+
+        if (messageEmb is null) throw new DataException("Cant get embeddings for message");
+        if (mainCategory is null) throw new DataException($"Cant get {MainCategoryLabel} for message");
+        
+        var bankFaqs = await _bankFaqs
+            .Where(b => b.MainCategory == mainCategory)
+            .ToListAsync();
+
+        var ratedAnswers = _RateByEmbedding(bankFaqs, messageEmb);
+        return await _GetAnswersAsync(ratedAnswers, message);
+    }
+    
+    private List<(string answer, int score)> _RateByEmbedding(
+        List<BankFaq> bankFaqs,
+        double[] messageEmb)
+    {
+        List<(string answer, int score)> ratedAnswers = new();
+        
+        foreach (var bankFaq in bankFaqs)
+        {
+            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding);
+            if (embedding is null)
+                throw new JsonException($"Cant deserialize embedding for example `{bankFaq.ExampleQuestion}");
+            var score = MathOperations.CosineSimilarity(embedding, messageEmb);
+            ratedAnswers.Add((answer: bankFaq.TemplateResponse, (int)(score*100)));
+        }
+
+        return ratedAnswers
+            .OrderByDescending(a => a.score)
+            .Distinct()
+            .Take(MaxTemplates)
+            .ToList();
+    } 
+    
+
+    public async Task<string?> _GetMainCategoryAsync(
+        Dictionary<string, List<string>> categoryTree,
+        string message)
+    {
+        var mainCategories = categoryTree.Keys.ToList();
+        var systemPrompt = _BuildMainCategoryPrompt(mainCategories);
 
         var startWaiting = DateTime.UtcNow;
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
         Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
-            var indexes = JsonSerializer.Deserialize<List<int>>(answer);
-            if (indexes == null || indexes.Count < 3)
-                throw new DataException("Model returned invalid JSON: " + answer);
-
-            int mainIndex = indexes[0];
-            int subIndex = indexes[1];
-            int targetIndex = indexes[2];
-
-            if (mainIndex < -1 || mainIndex >= mainCategories.Count)
-                throw new DataException($"{MainCategoryLabel} index out of range: {mainIndex}");
-            if (subIndex < -1 || subIndex >= subCategories.Count)
-                throw new DataException($"{SubCategoryLabel} index out of range: {subIndex}");
-            if (targetIndex < -1 || targetIndex >= targetAudiences.Count)
-                throw new DataException($"{TargetAudienceLabel} index out of range: {targetIndex}");
-
-            string? mainCategory = mainIndex >= 0 ? mainCategories[mainIndex] : null;
-            string? subCategory = subIndex >= 0 ? subCategories[subIndex] : null;
-            string? targetCategory = targetIndex >= 0 ? targetAudiences[targetIndex] : null;
-
-            Logger.LogInformation($"Сущности: [{mainCategory}, {subCategory}, {targetCategory}]");
-
-            if (string.IsNullOrWhiteSpace(mainCategory) &&
-                string.IsNullOrWhiteSpace(subCategory) &&
-                string.IsNullOrWhiteSpace(targetCategory))
-                throw new DataException($"No recommendations found for `{message}`");
-
-            return await _GetAnswers((mainCategory, subCategory, targetCategory), message);
+            var index = int.Parse(answer);
+            if (index < 0) return null;
+            var mainCategory = mainCategories[index];
+            
+            Logger.Log($"Главная категория: {mainCategory}");
+            return mainCategory;
         }
         catch (Exception ex)
         {
@@ -84,123 +102,53 @@ public class RecommendationsGenerator
         }
     }
 
-
-
-    private async Task<List<AnswerScoreDto>> _GetAnswers(
-        (string? MainCategory, string? SubCategory, string? TargetAudience) keys,
+    private async Task<List<AnswerScoreDto>> _GetAnswersAsync(
+        List<(string answer, int score)> ratedAnswers,
         string message)
     {
-        var rightAnswers = await _bankFaqs
-            .Where(b => keys.MainCategory == null || b.MainCategory == keys.MainCategory)
-            .Where(b => keys.SubCategory == null || b.Subcategory == keys.SubCategory)
-            .Where(b => keys.TargetAudience == null || b.TargetAudience == keys.TargetAudience)
-            .Select(b => b.TemplateResponse)
-            .Distinct()
-            .OrderBy(t => t)
-            .Take(MaxTemplates)
-            .ToListAsync();
-        foreach (var b in _bankFaqs)
-        {
-            Logger.LogInformation($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
-        }
-        if(rightAnswers.Count == 0) throw new DataException("No recommendations found for `" + message + "`");
-        Logger.LogInformation($"rightAnswers: {JsonSerializer.Serialize(
-            rightAnswers,
-            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
-        )}");
-
-        var startWaiting = DateTime.UtcNow;
-        var response = await _sciBoxClient.Ask(_BuildAnswersPrompt(rightAnswers), message);
-        Logger.LogInformation($"Шаг 2: Рекомендации по сущностям за {(DateTime.UtcNow - startWaiting).Seconds}c");
+        var systemPrompt = _BuildAnswersPrompt(ratedAnswers);
+        var response = await _sciBoxClient.Ask(systemPrompt, message);
         
-        List<List<int>>? lists;
-        try
+        var indexes = JsonSerializer.Deserialize<List<int>>(response);
+        if(indexes is null || indexes.Count == 0) throw new DataException("Cant get answers for message");
+        Logger.LogJson("indexes", indexes);
+        
+        var chosenAnswers = new List<AnswerScoreDto>();
+        foreach (var index in indexes)
         {
-            lists = JsonSerializer.Deserialize<List<List<int>>>(response);
+            chosenAnswers.Add(new AnswerScoreDto(ratedAnswers[index].answer, ratedAnswers[index].score));
         }
-        catch (Exception ex)
-        {
-            throw new JsonException("Model returned bad json: " + response + ex);
-        }
-
-        if (lists is null || lists.Count != 2)
-            throw new DataException("Model returned bad json lists: " + response);
-
-        var indices = lists[0];
-        var scores = lists[1];
-
-        if (indices.Count != scores.Count)
-            throw new DataException("Indices and scores counts do not match");
-
-        var recommendations = indices
-            .Select((idx, i) => new AnswerScoreDto(rightAnswers[idx], scores[i]))
-            .ToList();
-
-        Logger.LogInformation($"Ответы: {JsonSerializer.Serialize(
-            recommendations,
-            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
-        )}");
-        return recommendations;
+        return chosenAnswers;
     }
 
-    private string _BuildRecommendationPrompt(
-        Dictionary<string, List<string>> categoryTree,
-        List<string> targetAudiences)
+    private string _BuildMainCategoryPrompt(
+        List<string> mainCategories)
     {
-        var mainCategories = categoryTree.Keys.ToList();
         var sb = new System.Text.StringBuilder();
-        sb.Append($"Выбери для каждой сущности индекс подходящего значения и верни строго JSON-массив целых чисел в формате [MainCategoryIndex , SubCategoryIndex, TargetAudienceIndex]. ");
-        sb.Append("Индексы начинаются с 0. Если для сущности нет подходящего значения — используй -1. Подкатегорию можно выбирать только из списка подкатегорий выбранной главной категории. Ничего кроме JSON-массива не возвращай. Пример: [0,2,-1]\n\n");
 
-        sb.Append($"{MainCategoryLabel}:\n");
-        for (int i = 0; i < mainCategories.Count; i++)
-        {
-            sb.Append(i).Append(": ").Append(mainCategories[i]).Append('\n');
-        }
-
-        sb.Append($"\n{SubCategoryLabel}:\n");
-        for (int i = 0; i < mainCategories.Count; i++)
-        {
-            var mainCat = mainCategories[i];
-            sb.Append(mainCat).Append(":\n");
-            var subs = categoryTree[mainCat];
-            for (int j = 0; j < subs.Count; j++)
-            {
-                sb.Append("  ").Append(j).Append(": ").Append(subs[j]).Append('\n');
-            }
-        }
-
-        sb.Append($"\n{TargetAudienceLabel}:\n");
-        for (int i = 0; i < targetAudiences.Count; i++)
-        {
-            sb.Append(i).Append(": ").Append(targetAudiences[i]).Append('\n');
-        }
+        sb.AppendLine("Для любого запроса пользователя выдели основную категорию из массива");
+        sb.AppendLine($"[{string.Join(",", mainCategories)}]");
+        sb.AppendLine("В ответ пришли строго одно число - индекс категории из массива от нуля");
+        sb.AppendLine("если подходящей категории нет, верни -1");
 
         return sb.ToString();
     }
-
-
     
-    private string _BuildAnswersPrompt(IEnumerable<string> answers)
+    
+    private string _BuildAnswersPrompt(List<(string answer, int score)> ratedAnswers)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("Выбери подходящие ответы и верни строго JSON-массив из двух массивов: [indices, scores]. ");
-        sb.Append("Первый элемент — массив индексов выбранных ответов (начиная с 0). ");
-        sb.Append("Второй элемент — массив соответствующих процентов пригодности (целые 0-100). ");
-        sb.Append("Ни слов, ни пояснений, ничего кроме JSON-массива. Пример: [[0,2,3],[90,70,50]]\n\n");
+        sb.Append("Для запроса пользователя выбирай подходящие ответы и верни строго JSON-массив подходящих индексов.\n");
+        sb.Append("Ни слов, ни пояснений, ничего кроме JSON-массива. Пример: [0,2,3] или [] или [2]\n\n");
         sb.Append("Варианты (не менять):\n");
         
         int index = 0;
-        foreach (var answer in answers)
+        foreach (var answer in ratedAnswers)
         {
-            var text = string.IsNullOrWhiteSpace(answer) ? "-" : answer.Trim();
+            var text = string.IsNullOrWhiteSpace(answer.answer) ? "-" : answer.answer.Trim();
             sb.Append(index).Append(": ").Append(text).Append('\n');
             index++;
         }
         return sb.ToString();
     }
-
-
-
-
 }

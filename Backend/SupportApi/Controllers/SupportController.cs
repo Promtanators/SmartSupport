@@ -3,6 +3,7 @@ using SupportApi.Data;
 using SupportApi.Models.Dto;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Recommendations;
+using Microsoft.EntityFrameworkCore;
 using SupportApi.Models.Entities;
 
 namespace SupportApi.Controllers;
@@ -31,16 +32,37 @@ public class SupportController : ControllerBase
     public async Task<IActionResult> Ask([FromBody] AskDto dto)
     {
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        //var recommendations = await gen.GetRecommendations(dto.Message);
-        var recommendations = new List<AnswerScoreDto>
-        {
-            new AnswerScoreDto("Тестовый ответ 1", 95),
-            new AnswerScoreDto("Тестовый ответ 2", 87),
-            new AnswerScoreDto("Тестовый ответ 3", 76)
-        };
+        var recommendations = await gen.GetRecommendations(dto.Message);
+        
         var response = new ResponseDto(recommendations);
         
         return await Task.FromResult(Ok(response));
+    }
+    
+    [HttpGet("update")]
+    public async Task<IActionResult> Update()
+    {
+        try
+        {
+            foreach (var dbBankFaq in _db.BankFaqs)
+            {
+                var question = dbBankFaq.ExampleQuestion;
+
+                var embedding = await _sciBoxClient.GetEmbeddingAsync(question);
+
+                dbBankFaq.ExampleEmbedding = embedding;
+            }
+        }
+        catch (Exception ex)
+        {
+            return await Task.FromResult(Ok("Error while updating embedding column: " + ex.Message)); 
+        }
+        finally
+        {
+            await _db.SaveChangesAsync();
+        }
+
+        return await Task.FromResult(Ok("Database updated successfully"));
     }
 
     [HttpGet("all")]
@@ -48,10 +70,10 @@ public class SupportController : ControllerBase
     {
         var faqs = _db.BankFaqs.ToList();
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        
-        
-        string message = "Карта сломалась пополам - что делать??";
-        
+
+
+        string message = "Как стать клиентом банка?";
+
         try
         {
             var startWaiting = DateTime.UtcNow;
