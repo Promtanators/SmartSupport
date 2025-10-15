@@ -5,6 +5,13 @@ import particlesConfig from "./particles-config";
 import { loadSlim } from "tsparticles-slim";
 
 export default function UserPage({ onNextPage, message, setMessage }) {
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && message.trim()) {
+      e.preventDefault();
+      onNextPage();
+    }
+  };
+
   return (
     <>
       <Particles
@@ -20,14 +27,14 @@ export default function UserPage({ onNextPage, message, setMessage }) {
             Нужна помощь?
           </Typography.Title>
           <Typography.Text type="secondary" style={styles.text}>
-            Опишите вашу проблему или вопрос, и мы постараемся помочь как можно
-            скорее.
+            Опишите вашу проблему или вопрос, и мы постараемся помочь.
           </Typography.Text>
           <div style={styles.inputContainer}>
             <Input.TextArea
               placeholder="Например: Не могу войти в личный кабинет"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyPress}
               autoSize={{ minRows: 2, maxRows: 6 }}
               style={{ flex: 1 }}
             />
@@ -58,6 +65,7 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     height: "100vh",
+    boxSizing: "border-box",
     padding: 20,
     position: "relative",
     zIndex: 1,

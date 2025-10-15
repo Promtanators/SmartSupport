@@ -1,103 +1,84 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, Input, Button, Avatar, Typography, Row, Col, Modal } from "antd";
 import {
   SendOutlined,
   UserOutlined,
-  RobotOutlined,
+  CustomerServiceOutlined,
   CommentOutlined,
 } from "@ant-design/icons";
 
-const { Text } = Typography;
-
 const cannedResponses = [
-  { title: "Стандартное приветствие", text: `Добрый день! Чем могу помочь?` },
+  { title: "Приветствие", text: "Добрый день! Чем могу помочь?" },
   {
-    title: "Уточнение по карте",
+    title: "Уточнение",
     text: "Для вашей безопасности, уточните, пожалуйста, последние 4 цифры номера вашей карты.",
   },
   {
-    title: "Инструкция по выписке",
+    title: "Инструкция",
     text: "Выписку за прошлый месяц вы можете найти в мобильном приложении в разделе 'История операций' -> 'Заказать отчет'.",
   },
   {
-    title: "Перевод на специалиста",
-    text: "К сожалению, этот вопрос вне моей компетенции. Перевожу ваш запрос на старшего специалиста. Пожалуйста, оставайтесь на линии.",
+    title: "Перевод",
+    text: "К сожалению, этот вопрос вне моей компетенции. Перевожу ваш запрос на старшего специалиста.",
   },
   {
-    title: "Благодарность за ожидание",
+    title: "Благодарность",
     text: "Спасибо за ожидание! Я уточнил информацию по вашему вопросу.",
   },
   {
-    title: "Завершение диалога",
+    title: "Завершение",
     text: "Рад был помочь! Если у вас появятся другие вопросы, обращайтесь. Всего доброго!",
   },
   {
-    title: "Уточнение проблемы",
+    title: "Проблема",
     text: "Не могли бы вы, пожалуйста, описать проблему более подробно?",
   },
   {
-    title: "Проверка данных",
+    title: "Проверка",
     text: "Мне потребуется несколько минут, чтобы проверить данные. Пожалуйста, не отключайтесь.",
   },
 ];
 
 export default function SupportOperatorPage({ message }) {
-  // 1. Состояние для поля ввода переименовано, чтобы избежать конфликта с пропсом `message`
-  const [operatorInput, setOperatorInput] = useState("");
-  const [isChatActive, setIsChatActive] = useState(true);
-  const [chatMessages, setChatMessages] = useState([]);
+  const [supportInput, setSupportInput] = useState("");
+  const [isActive, setIsActive] = useState(true);
 
-  const [isUserReplyModalVisible, setIsUserReplyModalVisible] = useState(false);
-  const [userReplyText, setUserReplyText] = useState(
-    "Спасибо, вы мне очень помогли!"
+  const [messages, setMessages] = useState(() =>
+    message ? [{ id: Date.now(), text: message, sender: "user" }] : []
   );
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const handleModalKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (userInput.trim()) {
+        // Проверяем, что поле не пустое
+        handleSendUserReply();
+      }
+    }
+  };
+  const [userInput, setUserInput] = useState("");
+  // для прокрутки к сообщению при отправке
   const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const addMessage = (text, sender) => {
+    if (!text.trim()) return;
+    setMessages((prev) => [...prev, { id: Date.now(), text, sender }]);
   };
 
-  // 2. Добавлен useEffect для обработки входящего пропса `message`
   useEffect(() => {
-    if (message) {
-      const initialUserMessage = {
-        id: Date.now(),
-        text: message,
-        sender: "user",
-      };
-      setChatMessages([initialUserMessage]);
-    }
-  }, [message]); // Эффект запускается при получении нового значения message
-
-  useEffect(scrollToBottom, [chatMessages]);
-
-  const handleTemplateClick = (text) => {
-    if (isChatActive) {
-      setOperatorInput(text); // Используем новое имя состояния
-    }
-  };
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSend = () => {
-    if (operatorInput.trim() === "" || !isChatActive) return; // Используем новое имя состояния
-    const operatorMessage = {
-      id: Date.now(),
-      text: operatorInput, // Используем новое имя состояния
-      sender: "operator",
-    };
-    setChatMessages((prev) => [...prev, operatorMessage]);
-    setOperatorInput(""); // Очищаем поле ввода
+    addMessage(supportInput, "operator");
+    setSupportInput("");
   };
 
   const handleSendUserReply = () => {
-    if (userReplyText.trim() === "") return;
-    const userReply = {
-      id: Date.now() + 1,
-      text: userReplyText,
-      sender: "user",
-    };
-    setChatMessages((prev) => [...prev, userReply]);
-    setUserReplyText("Спасибо, вы мне очень помогли!");
-    setIsUserReplyModalVisible(false);
+    addMessage(userInput, "user");
+    setIsModalOpen(false);
+    setUserInput("Спасибо, вы мне очень помогли!");
   };
 
   const handleKeyPress = (e) => {
@@ -107,10 +88,6 @@ export default function SupportOperatorPage({ message }) {
     }
   };
 
-  const handleEndChat = () => {
-    setIsChatActive(false);
-  };
-
   return (
     <div style={styles.pageWrapper}>
       <Row gutter={16} style={{ height: "100%" }}>
@@ -118,10 +95,10 @@ export default function SupportOperatorPage({ message }) {
           <Card
             title="Диалог с клиентом"
             style={styles.chatCard}
-            bodyStyle={styles.chatCardBody}
+            styles={{ body: styles.chatCardBody }}
           >
             <div style={styles.messageList}>
-              {chatMessages.map((msg) => (
+              {messages.map((msg) => (
                 <div
                   key={msg.id}
                   style={{
@@ -135,20 +112,20 @@ export default function SupportOperatorPage({ message }) {
                       <Avatar
                         size="small"
                         icon={<UserOutlined />}
-                        style={{ marginRight: 8, backgroundColor: "#87d068" }}
+                        style={styles.userAvatar}
                       />
                     )}
-                    <Text
+                    <Typography.Text
                       style={{
                         color: msg.sender === "operator" ? "#fff" : "inherit",
                       }}
                     >
                       {msg.text}
-                    </Text>
+                    </Typography.Text>
                     {msg.sender === "operator" && (
                       <Avatar
                         size="small"
-                        icon={<RobotOutlined />}
+                        icon={<CustomerServiceOutlined />}
                         style={{ marginLeft: 8 }}
                       />
                     )}
@@ -160,38 +137,36 @@ export default function SupportOperatorPage({ message }) {
             <div style={styles.inputArea}>
               <Input.TextArea
                 placeholder={
-                  isChatActive ? "Введите ответ клиенту..." : "Диалог завершен."
+                  isActive ? "Введите ответ клиенту..." : "Диалог завершен."
                 }
-                value={operatorInput} // 3. Используем новое имя состояния
-                onChange={(e) => setOperatorInput(e.target.value)} // 3. Используем новое имя состояния
-                onKeyPress={handleKeyPress}
+                value={supportInput}
+                onChange={(e) => setSupportInput(e.target.value)}
+                onKeyDown={handleKeyPress}
                 autoSize={{ minRows: 1, maxRows: 5 }}
-                disabled={!isChatActive}
+                disabled={!isActive}
                 style={{ flex: 1 }}
               />
               <Button
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={handleSend}
-                disabled={!operatorInput.trim() || !isChatActive} // 3. Используем новое имя состояния
+                disabled={!supportInput.trim() || !isActive}
                 style={{ marginRight: 8 }}
               >
                 Ответить
               </Button>
               <Button
                 icon={<CommentOutlined />}
-                onClick={() => setIsUserReplyModalVisible(true)}
-                disabled={!isChatActive}
-                title="Имитировать ответ клиента"
+                onClick={() => setIsModalOpen(true)}
+                disabled={!isActive}
                 style={{ marginRight: 8 }}
               >
                 Клиент
               </Button>
               <Button
                 danger
-                onClick={handleEndChat}
-                disabled={!isChatActive}
-                title="Завершить текущий диалог и заблокировать ввод"
+                onClick={() => setIsActive(false)}
+                disabled={!isActive}
               >
                 Завершить
               </Button>
@@ -200,26 +175,22 @@ export default function SupportOperatorPage({ message }) {
         </Col>
 
         <Col span={7} style={{ height: "100%" }}>
-          <Card
-            title="Шаблоны ответов"
-            style={styles.templateCard}
-            bodyStyle={styles.templateCardBody}
-          >
-            {cannedResponses.map((response, index) => (
+          <Card title="Шаблоны ответов" style={styles.templateCard}>
+            {cannedResponses.map((res, index) => (
               <Card
                 key={index}
                 size="small"
                 hoverable
                 style={{
                   marginBottom: 12,
-                  cursor: isChatActive ? "pointer" : "not-allowed",
+                  cursor: isActive ? "pointer" : "not-allowed",
+                  opacity: isActive ? 1 : 0.5,
                 }}
-                onClick={() => handleTemplateClick(response.text)}
-                bodyStyle={{ opacity: isChatActive ? 1 : 0.5 }}
+                onClick={() => isActive && setSupportInput(res.text)}
               >
-                <Text strong>{response.title}</Text>
+                <Typography.Text strong>{res.title}</Typography.Text>
                 <br />
-                <Text type="secondary">{response.text}</Text>
+                <Typography.Text type="secondary">{res.text}</Typography.Text>
               </Card>
             ))}
           </Card>
@@ -227,20 +198,21 @@ export default function SupportOperatorPage({ message }) {
       </Row>
 
       <Modal
-        title="Имитация ответа клиента"
-        open={isUserReplyModalVisible}
+        title="Имитация запроса клиента"
+        open={isModalOpen}
         onOk={handleSendUserReply}
-        onCancel={() => setIsUserReplyModalVisible(false)}
-        okText="Отправить как Клиент"
+        onCancel={() => setIsModalOpen(false)}
+        okText="Отправить"
         cancelText="Отмена"
         centered
       >
         <Input.TextArea
-          placeholder="Введите сообщение от лица клиента..."
-          value={userReplyText}
-          onChange={(e) => setUserReplyText(e.target.value)}
+          placeholder="Введите запрос от лица клиента."
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
           autoSize={{ minRows: 3, maxRows: 5 }}
           style={{ marginTop: 16 }}
+          onKeyDown={handleModalKeyPress}
         />
       </Modal>
     </div>
@@ -258,19 +230,16 @@ const styles = {
     height: "100%",
     display: "flex",
     flexDirection: "column",
+    flex: 1,
+    padding: "16px",
   },
   chatCardBody: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden",
     padding: "16px",
   },
-  messageList: {
-    flex: 1,
-    overflowY: "auto",
-    marginBottom: "16px",
-  },
+  messageList: { flex: 1, overflowY: "auto", marginBottom: "16px" },
   inputArea: {
     display: "flex",
     gap: "8px",
@@ -281,16 +250,12 @@ const styles = {
     height: "100%",
     display: "flex",
     flexDirection: "column",
-  },
-  templateCardBody: {
     flex: 1,
     overflowY: "auto",
     padding: "16px",
   },
-  messageContainer: {
-    display: "flex",
-    marginBottom: "12px",
-  },
+  messageContainer: { display: "flex", marginBottom: "12px" },
+  userAvatar: { marginRight: 8, backgroundColor: "#87d068" },
   messageBubble: (sender) => ({
     padding: "8px 12px",
     borderRadius: "16px",
