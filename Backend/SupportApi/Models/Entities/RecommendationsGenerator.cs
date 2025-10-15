@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SupportApi.Data;
@@ -6,15 +7,29 @@ namespace SupportApi.Models.Entities;
 
 public class RecommendationsGenerator
 {
+    
+    private readonly string SystemPromptRecommendation = "Ты выбираешь на каждое сообщение пользователя 1 ключевое слово" +
+                                                         " из каждого списка, если ключевое слово не найдено, то напиши " +
+                                                         "-. Ответ оформи в json формат, пример: {MainCategory: что-то из первого списка, SubCategory:" +
+                                                         " что-то из второго списка, TargetAudience: что-то из третьего списка}. Вот списки: ";
+    
+    private readonly string SystemPromptAnswers = "Выбери самый подходящий ответ или ответы, который отвечает на вопрос пользователя" +
+                                                  "Ответ оформи просто в столбец друг за другом." +
+                                                  "(Если не нашёл ни одного ответа то не придумывай, а выводи: Ответ не найден в базе знаний). Вот список:";
+    
     private DbSet<BankFaq> _bankFaqs;
+    private SciBoxClient _sciBoxClient;
     public RecommendationsGenerator(DbSet<BankFaq> bankFaqs)
     {
         _bankFaqs = bankFaqs;
+        
+        var token = Environment.GetEnvironmentVariable("SCIBOX_API_KEY")
+                    ?? throw new InvalidOperationException("Environment variable SCIBOX_API_KEY is not set.");
+        _sciBoxClient = new SciBoxClient(token);
     }
 
     public async Task<List<string>> GetRecommendations (string message)
     {
-        var listRecommendations = new List<string>();
         var mainCategories = _bankFaqs
             .Select(b => b.MainCategory)
             .Distinct()
@@ -27,54 +42,60 @@ public class RecommendationsGenerator
             .Select(b => b.TargetAudience)
             .Distinct()
             .ToList();
+        
         string mainCategoriesString = string.Join(",",  mainCategories);
         string subCategoriesString = string.Join(",",  subcategories);
         string targetAudiencesString = string.Join(",", targetAudiences);
-        var token = Environment.GetEnvironmentVariable("SCIBOX_API_KEY") 
-                    ?? throw new InvalidOperationException("Environment variable SCIBOX_API_KEY is not set.");
-        var client = new SciBoxClient(token);
-        var answer = await client.Ask("Ты выбираешь на каждое сообщение пользователя 1 ключевое слово" +
-                                      " из каждого списка, если ключевое слово не найдено, то напиши " +
-                                      "-. Ответ оформи в json формат, пример: {MainCategory: что-то из первого списка, SubCategory:" +
-                                      " что-то из второго списка, TargetAudience: что-то из третьего списка}. Вот списки: "
-                                      + mainCategoriesString + "|" + subCategoriesString + "|" + targetAudiencesString, message);
-        var jsonAnswer = JsonDocument.Parse(answer);
-        listRecommendations.Add(jsonAnswer.RootElement.GetProperty("MainCategory").GetString());
-        listRecommendations.Add(jsonAnswer.RootElement.GetProperty("SubCategory").GetString());
-        listRecommendations.Add(jsonAnswer.RootElement.GetProperty("TargetAudience").GetString());
-        if (listRecommendations.Contains("-"))
+        string systemPrompt = SystemPromptRecommendation + mainCategoriesString + "|" + subCategoriesString + "|" +
+                              targetAudiencesString;
+        
+        var answer = await _sciBoxClient.Ask(systemPrompt, message);
+        
+        try
         {
-            listRecommendations.Add("Ответ не найден в базе знаний");
+            var jsonAnswer = JsonDocument.Parse(answer);
+
+            var listRecommendations = new List<string?>();
+            listRecommendations.Add(jsonAnswer.RootElement.GetProperty("MainCategory").GetString());
+            listRecommendations.Add(jsonAnswer.RootElement.GetProperty("SubCategory").GetString());
+            listRecommendations.Add(jsonAnswer.RootElement.GetProperty("TargetAudience").GetString());
+
+            if (listRecommendations.Any(x => string.IsNullOrWhiteSpace(x) || x == "-".Trim()))
+            {
+                throw new DataException("Ответ не найден в базе знаний");
+            }
+
+            return listRecommendations;
         }
-        return listRecommendations;
+        catch
+        {
+            throw new DataException("Языковая модель вернула невалидный JSON");
+        }
     }
 
-    public async Task<List<string>> GetAnswers(List<string> listRecommendations, string message)
+    public async Task<List<string>> GetAnswers(List<string> recommendations, string message)
     {
-        var result = await _bankFaqs.Where(b => b.MainCategory == listRecommendations[0]
-                                                && b.Subcategory == listRecommendations[1] 
-                                                && b.TargetAudience == listRecommendations[2]).Select(a => a.TemplateResponse).ToListAsync();
-        var token = Environment.GetEnvironmentVariable("SCIBOX_API_KEY") 
-                    ?? throw new InvalidOperationException("Environment variable SCIBOX_API_KEY is not set.");
-        var client = new SciBoxClient(token);
-        string listAnswer = string.Join(",", result);
-        foreach (var res in result)
+        List<Func<BankFaq, bool>> filters = new()
         {
+            b => b.MainCategory == recommendations[0] && b.Subcategory == recommendations[1],
+            b => b.MainCategory == recommendations[0]
+        };
+
+
+        foreach (var filter in filters)
+        {
+                var rightAnswers = _bankFaqs.Where(filter).Select(a => a.TemplateResponse).ToList();
+
+                string listAnswer = string.Join(",", rightAnswers);
+                var systemPrompt = SystemPromptAnswers + listAnswer;
             
+                var response = await _sciBoxClient.Ask(systemPrompt, message);
+
+                List<string> answers = response.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList();
+
+                if (answers.Count != 0 && !answers.Any(a => a.Contains("Ответ не найден в базе знаний"))) return answers;
         }
-        var answer = await client.Ask("Выбери самый подходящий ответ или ответы (Если несколько ответов то пропиги их через (|)) из этого списка"+ listAnswer +" на этот вопрос (Если не нашёл ни одного ответа то не придумывай сам а протсо выведи: Ответ не найден в базе знаний)", message);
-        result.Clear();
-        answer.Split("|").ToList().ForEach(a => result.Add(a));
-        if (result[0] == "Ответ не найден в базе знаний")
-        {
-            result.Clear();
-            result = await _bankFaqs.Where(b => b.MainCategory == listRecommendations[0]
-                                                && b.Subcategory == listRecommendations[1]).Select(a => a.TemplateResponse).ToListAsync();
-            listAnswer = string.Join(",", result);
-            answer = await client.Ask("Выбери самый подходящий ответ или ответы (Если несколько ответов то пропиги их через (|)) из этого списка"+ listAnswer +" на этот вопрос (Если не нашёл ни одного ответа то не придумывай сам а протсо выведи: Ответ не найден в базе знаний)", message);
-            result.Clear();
-        }
-        answer.Split("|").ToList().ForEach(a => result.Add(a));
-        return result;
+        
+        throw new DataException("Ответ не найден в базе знаний");
     }
 }

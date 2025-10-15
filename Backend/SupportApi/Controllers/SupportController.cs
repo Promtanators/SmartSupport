@@ -36,13 +36,18 @@ public class SupportController : ControllerBase
     {
         var faqs = _db.BankFaqs.ToList();
         var gen = new RecommendationsGenerator(_db.BankFaqs);
-        var message = "Как оформить карту MORE?";
-        var recommendations = await gen.GetRecommendations(message);
-        var result = gen.GetAnswers(recommendations, message);
-        for(int i = 0; i < result.Result.Count; ++i)
+        string message = "Не могу войти в Интернет-банк?";
+
+        
+        try
         {
-            Console.WriteLine(result.Result[i]);
+            var recommendations = await gen.GetRecommendations(message);
+            var results = await gen.GetAnswers(recommendations, message);
+            return Ok(results);
         }
-        return Ok(faqs);
+        catch (Exception e)
+        {
+            return Ok($"Ошибка при получении ответов от LLM: {e.Message}");
+        }
     }
 }
