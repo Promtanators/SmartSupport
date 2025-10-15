@@ -1,6 +1,6 @@
 import { useState } from "react";
-import UserPage from "../pages/UserPage";
-import { SupportPage } from "../pages";
+import UserPage from "./pages/UserPage";
+import { SupportPage } from "./pages";
 
 function App() {
   const [currentPage, setCurrentPage] = useState(0);

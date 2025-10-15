@@ -10,7 +10,12 @@ import {
   Modal,
   Divider,
 } from "antd";
-import { SendOutlined, UserOutlined, RobotOutlined, CommentOutlined } from "@ant-design/icons";
+import {
+  SendOutlined,
+  UserOutlined,
+  RobotOutlined,
+  CommentOutlined,
+} from "@ant-design/icons";
 
 const { Text, Title } = Typography;
 
@@ -54,16 +59,18 @@ const cannedResponses = [
 ];
 
 // ПРИНИМАЕТ initialMessages как проп, который должен быть массивом с первым сообщением клиента
-export default function SupportOperatorPage({ initialMessages = [] }) { 
+export default function SupportOperatorPage({ initialMessages = [] }) {
   const [message, setMessage] = useState("");
   const [isChatActive, setIsChatActive] = useState(true);
-  
+
   // Инициализируем сообщения переданным массивом (с сообщением клиента)
-  const [chatMessages, setChatMessages] = useState(initialMessages); 
-  
+  const [chatMessages, setChatMessages] = useState(initialMessages);
+
   // Состояния для модального окна ответа клиента
   const [isUserReplyModalVisible, setIsUserReplyModalVisible] = useState(false);
-  const [userReplyText, setUserReplyText] = useState("Спасибо, вы мне очень помогли!"); 
+  const [userReplyText, setUserReplyText] = useState(
+    "Спасибо, вы мне очень помогли!"
+  );
 
   const messagesEndRef = useRef(null);
 
@@ -81,7 +88,7 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
       setChatMessages(initialMessages);
     }
   }, [initialMessages]);
-  
+
   // Эффект для прокрутки вниз
   useEffect(scrollToBottom, [chatMessages]);
 
@@ -93,7 +100,7 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
 
   const handleSend = () => {
     if (message.trim() === "" || !isChatActive) return;
-    
+
     // 1. Отправляем сообщение оператора
     const operatorMessage = {
       id: Date.now(),
@@ -106,16 +113,16 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
 
   const handleSendUserReply = () => {
     if (userReplyText.trim() === "") return;
-    
+
     const userReply = {
       id: Date.now() + 1,
       text: userReplyText,
       sender: "user",
     };
-    
+
     setChatMessages((prev) => [...prev, userReply]);
     setUserReplyText("Спасибо, вы мне очень помогли!"); // Сброс на дефолт
-    
+
     setIsUserReplyModalVisible(false); // Закрываем модальное окно
   };
 
@@ -125,11 +132,10 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
       handleSend();
     }
   };
-  
-  const handleEndChat = () => {
-      setIsChatActive(false);
-  };
 
+  const handleEndChat = () => {
+    setIsChatActive(false);
+  };
 
   return (
     <div style={styles.pageWrapper}>
@@ -198,7 +204,7 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
               >
                 Ответить
               </Button>
-              
+
               <Button
                 icon={<CommentOutlined />}
                 onClick={() => setIsUserReplyModalVisible(true)}
@@ -208,7 +214,7 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
               >
                 Клиент
               </Button>
-              
+
               <Button
                 danger
                 onClick={handleEndChat}
