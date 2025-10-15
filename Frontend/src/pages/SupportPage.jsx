@@ -1,15 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  Card,
-  Input,
-  Button,
-  Avatar,
-  Typography,
-  Row,
-  Col,
-  Modal,
-  Divider,
-} from "antd";
+import { Card, Input, Button, Avatar, Typography, Row, Col, Modal } from "antd";
 import {
   SendOutlined,
   UserOutlined,
@@ -17,17 +7,10 @@ import {
   CommentOutlined,
 } from "@ant-design/icons";
 
-const { Text, Title } = Typography;
-
-// Добавим имя оператора для большей реалистичности
-const OPERATOR_NAME = "Антон";
+const { Text } = Typography;
 
 const cannedResponses = [
-  {
-    // ИЗМЕНЕНИЕ: Вставляем имя оператора в шаблон
-    title: "Стандартное приветствие",
-    text: `Добрый день! Меня зовут ${OPERATOR_NAME}, чем могу помочь?`,
-  },
+  { title: "Стандартное приветствие", text: `Добрый день! Чем могу помочь?` },
   {
     title: "Уточнение по карте",
     text: "Для вашей безопасности, уточните, пожалуйста, последние 4 цифры номера вашей карты.",
@@ -58,72 +41,63 @@ const cannedResponses = [
   },
 ];
 
-// ПРИНИМАЕТ initialMessages как проп, который должен быть массивом с первым сообщением клиента
-export default function SupportOperatorPage({ initialMessages = [] }) {
-  const [message, setMessage] = useState("");
+export default function SupportOperatorPage({ message }) {
+  // 1. Состояние для поля ввода переименовано, чтобы избежать конфликта с пропсом `message`
+  const [operatorInput, setOperatorInput] = useState("");
   const [isChatActive, setIsChatActive] = useState(true);
+  const [chatMessages, setChatMessages] = useState([]);
 
-  // Инициализируем сообщения переданным массивом (с сообщением клиента)
-  const [chatMessages, setChatMessages] = useState(initialMessages);
-
-  // Состояния для модального окна ответа клиента
   const [isUserReplyModalVisible, setIsUserReplyModalVisible] = useState(false);
   const [userReplyText, setUserReplyText] = useState(
     "Спасибо, вы мне очень помогли!"
   );
-
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // !!! ИСПРАВЛЕНИЕ !!!: Используем useEffect, чтобы гарантировать, что
-  // если initialMessages изменится (включая первое обновление при монтировании),
-  // состояние chatMessages будет установлено правильно.
+  // 2. Добавлен useEffect для обработки входящего пропса `message`
   useEffect(() => {
-    // Проверяем, что массив не пуст и он отличается от текущего состояния
-    // Это исправляет проблему с отображением первого сообщения клиента
-    if (initialMessages.length > 0) {
-      setChatMessages(initialMessages);
+    if (message) {
+      const initialUserMessage = {
+        id: Date.now(),
+        text: message,
+        sender: "user",
+      };
+      setChatMessages([initialUserMessage]);
     }
-  }, [initialMessages]);
+  }, [message]); // Эффект запускается при получении нового значения message
 
-  // Эффект для прокрутки вниз
   useEffect(scrollToBottom, [chatMessages]);
 
   const handleTemplateClick = (text) => {
     if (isChatActive) {
-      setMessage(text);
+      setOperatorInput(text); // Используем новое имя состояния
     }
   };
 
   const handleSend = () => {
-    if (message.trim() === "" || !isChatActive) return;
-
-    // 1. Отправляем сообщение оператора
+    if (operatorInput.trim() === "" || !isChatActive) return; // Используем новое имя состояния
     const operatorMessage = {
       id: Date.now(),
-      text: message,
+      text: operatorInput, // Используем новое имя состояния
       sender: "operator",
     };
     setChatMessages((prev) => [...prev, operatorMessage]);
-    setMessage("");
+    setOperatorInput(""); // Очищаем поле ввода
   };
 
   const handleSendUserReply = () => {
     if (userReplyText.trim() === "") return;
-
     const userReply = {
       id: Date.now() + 1,
       text: userReplyText,
       sender: "user",
     };
-
     setChatMessages((prev) => [...prev, userReply]);
-    setUserReplyText("Спасибо, вы мне очень помогли!"); // Сброс на дефолт
-
-    setIsUserReplyModalVisible(false); // Закрываем модальное окно
+    setUserReplyText("Спасибо, вы мне очень помогли!");
+    setIsUserReplyModalVisible(false);
   };
 
   const handleKeyPress = (e) => {
@@ -188,8 +162,8 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
                 placeholder={
                   isChatActive ? "Введите ответ клиенту..." : "Диалог завершен."
                 }
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                value={operatorInput} // 3. Используем новое имя состояния
+                onChange={(e) => setOperatorInput(e.target.value)} // 3. Используем новое имя состояния
                 onKeyPress={handleKeyPress}
                 autoSize={{ minRows: 1, maxRows: 5 }}
                 disabled={!isChatActive}
@@ -199,12 +173,11 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={handleSend}
-                disabled={!message.trim() || !isChatActive}
+                disabled={!operatorInput.trim() || !isChatActive} // 3. Используем новое имя состояния
                 style={{ marginRight: 8 }}
               >
                 Ответить
               </Button>
-
               <Button
                 icon={<CommentOutlined />}
                 onClick={() => setIsUserReplyModalVisible(true)}
@@ -214,7 +187,6 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
               >
                 Клиент
               </Button>
-
               <Button
                 danger
                 onClick={handleEndChat}
@@ -254,7 +226,6 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
         </Col>
       </Row>
 
-      {/* Модальное окно для ввода ответа клиента */}
       <Modal
         title="Имитация ответа клиента"
         open={isUserReplyModalVisible}
@@ -262,7 +233,7 @@ export default function SupportOperatorPage({ initialMessages = [] }) {
         onCancel={() => setIsUserReplyModalVisible(false)}
         okText="Отправить как Клиент"
         cancelText="Отмена"
-        centered // Добавлен этот пропс для вертикального центрирования
+        centered
       >
         <Input.TextArea
           placeholder="Введите сообщение от лица клиента..."

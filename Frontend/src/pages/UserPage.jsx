@@ -1,12 +1,11 @@
 import { Input, Button, Typography, Card, Avatar } from "antd";
 import { SendOutlined, MessageOutlined } from "@ant-design/icons";
-import { useState, useCallback } from "react";
+import {  useCallback } from "react";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
 import particlesConfig from "./particles-config"; 
 
-export default function UserPage({ handleClick }, ) {
-  const [message, setMessage] = useState("");
+export default function UserPage({ handleClick, message, setMessage }) {
 
   const particlesInit = useCallback(async (engine) => {
     await loadSlim(engine);
@@ -17,7 +16,7 @@ export default function UserPage({ handleClick }, ) {
       <Particles
         id="tsparticles"
         init={particlesInit}
-        options={particlesConfig} 
+        options={particlesConfig}
         style={{
           position: "absolute",
           top: 0,
