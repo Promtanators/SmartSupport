@@ -32,9 +32,15 @@ public class RecommendationsGenerator
                     .Distinct()
                     .ToList()
             );
-        
-        
-        
+
+        var entities = await _GetEntities(categoryTree, message);
+        return await _GetAnswers(entities, message);
+    }
+
+    public async Task<(string? MainCategory, string? SubCategory, string? TargetAudience)> _GetEntities(
+        Dictionary<string, List<string>> categoryTree,
+        string message)
+    {
         var targetAudiences = await _bankFaqs
             .Select(b => b.TargetAudience)
             .Distinct()
@@ -43,10 +49,12 @@ public class RecommendationsGenerator
         var mainCategories = categoryTree.Keys.ToList();
         var subCategories = categoryTree.Values.SelectMany(subs => subs).Distinct().ToList();
 
-        var systemPrompt = _BuildRecommendationPrompt(categoryTree, targetAudiences);
-
+        var systemPrompt = _BuildEntitiesPrompt(categoryTree, targetAudiences, message);
+        
         var startWaiting = DateTime.UtcNow;
+        Logger.Log($"Запрос сущностей: {systemPrompt}");
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
+        Logger.Log($"ОТвет: {answer}");
         Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
@@ -76,15 +84,13 @@ public class RecommendationsGenerator
                 string.IsNullOrWhiteSpace(targetCategory))
                 throw new DataException($"No recommendations found for `{message}`");
 
-            return await _GetAnswers((mainCategory, subCategory, targetCategory), message);
+            return (mainCategory, subCategory, targetCategory);
         }
         catch (Exception ex)
         {
             throw new DataException("Model returned bad json categories: " + answer + ex);
         }
     }
-
-
 
     private async Task<List<AnswerScoreDto>> _GetAnswers(
         (string? MainCategory, string? SubCategory, string? TargetAudience) keys,
@@ -99,15 +105,12 @@ public class RecommendationsGenerator
             .OrderBy(t => t)
             .Take(MaxTemplates)
             .ToListAsync();
-        foreach (var b in _bankFaqs)
-        {
-            Logger.LogInformation($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
-        }
+        // foreach (var b in _bankFaqs)
+        // {
+        //     Logger.LogInformation($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
+        // }
         if(rightAnswers.Count == 0) throw new DataException("No recommendations found for `" + message + "`");
-        Logger.LogInformation($"rightAnswers: {JsonSerializer.Serialize(
-            rightAnswers,
-            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
-        )}");
+        Logger.LogJson("rightAnswers", rightAnswers);
 
         var startWaiting = DateTime.UtcNow;
         var response = await _sciBoxClient.Ask(_BuildAnswersPrompt(rightAnswers), message);
@@ -136,48 +139,48 @@ public class RecommendationsGenerator
             .Select((idx, i) => new AnswerScoreDto(rightAnswers[idx], scores[i]))
             .ToList();
 
-        Logger.LogInformation($"Ответы: {JsonSerializer.Serialize(
-            recommendations,
-            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
-        )}");
+        Logger.LogJson("Ответы", recommendations);
         return recommendations;
     }
 
-    private string _BuildRecommendationPrompt(
+    private string _BuildEntitiesPrompt(
         Dictionary<string, List<string>> categoryTree,
-        List<string> targetAudiences)
+        List<string> targetAudiences,
+        string message)
     {
-        var mainCategories = categoryTree.Keys.ToList();
         var sb = new System.Text.StringBuilder();
-        sb.Append($"Выбери для каждой сущности индекс подходящего значения и верни строго JSON-массив целых чисел в формате [MainCategoryIndex , SubCategoryIndex, TargetAudienceIndex]. ");
-        sb.Append("Индексы начинаются с 0. Если для сущности нет подходящего значения — используй -1. Подкатегорию можно выбирать только из списка подкатегорий выбранной главной категории. Ничего кроме JSON-массива не возвращай. Пример: [0,2,-1]\n\n");
 
-        sb.Append($"{MainCategoryLabel}:\n");
-        for (int i = 0; i < mainCategories.Count; i++)
-        {
-            sb.Append(i).Append(": ").Append(mainCategories[i]).Append('\n');
-        }
+        sb.AppendLine($"Выбери для каждой сущности индекс подходящего значения для вопроса:\n`{message}` ");
+        sb.AppendLine("и верни строго JSON-массив целых чисел");
+        sb.AppendLine($"в формате [{MainCategoryLabel}Index , {SubCategoryLabel}Index, {TargetAudienceLabel}Index]");
+        sb.AppendLine("Индексы начинаются с 0. Если для сущности нет подходящего значения — используй -1.");
+        sb.AppendLine("Подкатегорию можно выбирать только из подкатегорий выбранной главной категории.");
+        sb.AppendLine("Ничего кроме JSON-массива не возвращай. Пример: [0,2,-1]");
+        sb.AppendLine();
 
-        sb.Append($"\n{SubCategoryLabel}:\n");
-        for (int i = 0; i < mainCategories.Count; i++)
+        var mainCategories = categoryTree.Keys.ToList();
+        
+        var jsonObj = new
         {
-            var mainCat = mainCategories[i];
-            sb.Append(mainCat).Append(":\n");
-            var subs = categoryTree[mainCat];
-            for (int j = 0; j < subs.Count; j++)
+            MainCategory = mainCategories.Select((cat, i) => new { Index = i, Name = cat }).ToList(),
+            SubCategory = mainCategories.Select((cat, i) => new
             {
-                sb.Append("  ").Append(j).Append(": ").Append(subs[j]).Append('\n');
+                MainIndex = i,
+                Subs = categoryTree[cat].Select((sub, j) => new { Index = j, Name = sub }).ToList()
+            }).ToList(),
+            TargetAudience = targetAudiences.Select((ta, i) => new { Index = i, Name = ta }).ToList()
+        };
+        
+        return sb.ToString() + JsonSerializer.Serialize(
+            jsonObj,
+            new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             }
-        }
-
-        sb.Append($"\n{TargetAudienceLabel}:\n");
-        for (int i = 0; i < targetAudiences.Count; i++)
-        {
-            sb.Append(i).Append(": ").Append(targetAudiences[i]).Append('\n');
-        }
-
-        return sb.ToString();
+        );
     }
+
 
 
     

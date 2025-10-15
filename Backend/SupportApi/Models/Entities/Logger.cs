@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace SupportApi.Models.Entities;
 
 public static class Logger
@@ -8,6 +10,24 @@ public static class Logger
     {
         _logger = logger;
     }
+
+    public static void Log(string message, params object[] args)
+    {
+        LogInformation(message, args);
+    }
+
+    public static void LogJson(string caption, object json)
+    {
+        LogInformation($"{caption}: {JsonSerializer.Serialize(
+            json,
+            new JsonSerializerOptions 
+            { 
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            }
+        )}");
+    }
+
 
     public static void LogInformation(string message, params object[] args)
     {
