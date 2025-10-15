@@ -8,6 +8,7 @@ public class SciBoxClient
 {
     private const string ApiBaseUrl = "https://llm.t1v.scibox.tech";
     private const string ModelNameQwen = "Qwen2.5-72B-Instruct-AWQ";
+    private const string OpenRouterModelName = "qwen/qwen3-vl-8b-thinking";
     private const string ModelNameBge = "bge-m3";
     
     private const double Temperature = 0.1;
@@ -22,7 +23,7 @@ public class SciBoxClient
     public SciBoxClient(string apiKey)
     {
         _httpClient.DefaultRequestHeaders.Accept.Clear();
-        _httpClient.DefaultRequestHeaders.Add("x-litellm-api-key", apiKey);
+        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
     }
 
     private string _FormatJson(string responseString)
