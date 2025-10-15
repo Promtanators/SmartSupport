@@ -1,4 +1,4 @@
-﻿using SupportApi.Models.Entities.Enums;
+using SupportApi.Models.Entities.Enums;
 
 namespace SupportApi.Models.Entities;
 

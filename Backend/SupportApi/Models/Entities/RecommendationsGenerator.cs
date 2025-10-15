@@ -24,20 +24,26 @@ public class RecommendationsGenerator
 
     public async Task<List<AnswerScoreDto>> GetRecommendations(string message)
     {
-        var mainCategories = _bankFaqs
-            .Select(b => b.MainCategory)
-            .Distinct()
-            .ToList();
-        var subcategories = _bankFaqs
-            .Select(b => b.Subcategory)
-            .Distinct()
-            .ToList();
-        var targetAudiences = _bankFaqs
+        var categoryTree = await _bankFaqs
+            .GroupBy(b => b.MainCategory)
+            .ToDictionaryAsync(
+                g => g.Key,
+                g => g.Select(b => b.Subcategory)
+                    .Distinct()
+                    .ToList()
+            );
+        
+        
+        
+        var targetAudiences = await _bankFaqs
             .Select(b => b.TargetAudience)
             .Distinct()
-            .ToList();
+            .ToListAsync();
+        
+        var mainCategories = categoryTree.Keys.ToList();
+        var subCategories = categoryTree.Values.SelectMany(subs => subs).Distinct().ToList();
 
-        var systemPrompt = _BuildRecommendationPrompt(mainCategories, subcategories, targetAudiences);
+        var systemPrompt = _BuildRecommendationPrompt(categoryTree, targetAudiences);
 
         var startWaiting = DateTime.UtcNow;
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
@@ -55,13 +61,13 @@ public class RecommendationsGenerator
 
             if (mainIndex < -1 || mainIndex >= mainCategories.Count)
                 throw new DataException($"{MainCategoryLabel} index out of range: {mainIndex}");
-            if (subIndex < -1 || subIndex >= subcategories.Count)
+            if (subIndex < -1 || subIndex >= subCategories.Count)
                 throw new DataException($"{SubCategoryLabel} index out of range: {subIndex}");
             if (targetIndex < -1 || targetIndex >= targetAudiences.Count)
                 throw new DataException($"{TargetAudienceLabel} index out of range: {targetIndex}");
 
             string? mainCategory = mainIndex >= 0 ? mainCategories[mainIndex] : null;
-            string? subCategory = subIndex >= 0 ? subcategories[subIndex] : null;
+            string? subCategory = subIndex >= 0 ? subCategories[subIndex] : null;
             string? targetCategory = targetIndex >= 0 ? targetAudiences[targetIndex] : null;
 
             Console.WriteLine($"Сущности: [{mainCategory}, {subCategory}, {targetCategory}]");
@@ -94,6 +100,15 @@ public class RecommendationsGenerator
             .OrderBy(t => t)
             .Take(MaxTemplates)
             .ToListAsync();
+        foreach (var b in _bankFaqs)
+        {
+            Console.WriteLine($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
+        }
+        if(rightAnswers.Count == 0) throw new DataException("No recommendations found for `" + message + "`");
+        Console.WriteLine($"rightAnswers: {JsonSerializer.Serialize(
+            rightAnswers,
+            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
+        )}");
 
         var startWaiting = DateTime.UtcNow;
         var response = await _sciBoxClient.Ask(_BuildAnswersPrompt(rightAnswers), message);
@@ -129,36 +144,42 @@ public class RecommendationsGenerator
         return recommendations;
     }
 
-
-    
     private string _BuildRecommendationPrompt(
-        List<string> mainCategories,
-        List<string> subCategories,
+        Dictionary<string, List<string>> categoryTree,
         List<string> targetAudiences)
     {
+        var mainCategories = categoryTree.Keys.ToList();
         var sb = new System.Text.StringBuilder();
-        sb.Append($"Выбери для каждой сущности индекс подходящего значения и верни строго JSON-массив целых чисел в формате [{MainCategoryLabel}Index , {SubCategoryLabel}Index, {TargetAudienceLabel}Index]. ");
-        sb.Append("Индексы начинаются с 0. Если для сущности нет подходящего значения — используй -1. Ничего кроме JSON-массива не возвращай. Пример: [0,2,-1]\n\n");
-        sb.Append(MainCategoryLabel).Append(":\n");
-        
+        sb.Append($"Выбери для каждой сущности индекс подходящего значения и верни строго JSON-массив целых чисел в формате [MainCategoryIndex , SubCategoryIndex, TargetAudienceIndex]. ");
+        sb.Append("Индексы начинаются с 0. Если для сущности нет подходящего значения — используй -1. Подкатегорию можно выбирать только из списка подкатегорий выбранной главной категории. Ничего кроме JSON-массива не возвращай. Пример: [0,2,-1]\n\n");
+
+        sb.Append($"{MainCategoryLabel}:\n");
         for (int i = 0; i < mainCategories.Count; i++)
         {
-            sb.Append(i).Append(": ").Append(string.IsNullOrWhiteSpace(mainCategories[i]) ? "-" : mainCategories[i].Trim()).Append('\n');
+            sb.Append(i).Append(": ").Append(mainCategories[i]).Append('\n');
         }
-        sb.Append('\n').Append(SubCategoryLabel).Append(":\n");
-        
-        for (int i = 0; i < subCategories.Count; i++)
+
+        sb.Append($"\n{SubCategoryLabel}:\n");
+        for (int i = 0; i < mainCategories.Count; i++)
         {
-            sb.Append(i).Append(": ").Append(string.IsNullOrWhiteSpace(subCategories[i]) ? "-" : subCategories[i].Trim()).Append('\n');
+            var mainCat = mainCategories[i];
+            sb.Append(mainCat).Append(":\n");
+            var subs = categoryTree[mainCat];
+            for (int j = 0; j < subs.Count; j++)
+            {
+                sb.Append("  ").Append(j).Append(": ").Append(subs[j]).Append('\n');
+            }
         }
-        sb.Append('\n').Append(TargetAudienceLabel).Append(":\n");
-        
+
+        sb.Append($"\n{TargetAudienceLabel}:\n");
         for (int i = 0; i < targetAudiences.Count; i++)
         {
-            sb.Append(i).Append(": ").Append(string.IsNullOrWhiteSpace(targetAudiences[i]) ? "-" : targetAudiences[i].Trim()).Append('\n');
+            sb.Append(i).Append(": ").Append(targetAudiences[i]).Append('\n');
         }
+
         return sb.ToString();
     }
+
 
     
     private string _BuildAnswersPrompt(IEnumerable<string> answers)

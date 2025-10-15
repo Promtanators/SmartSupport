@@ -31,7 +31,13 @@ public class SupportController : ControllerBase
     public async Task<IActionResult> Ask([FromBody] AskDto dto)
     {
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        var recommendations = await gen.GetRecommendations(dto.Message);
+        //var recommendations = await gen.GetRecommendations(dto.Message);
+        var recommendations = new List<AnswerScoreDto>
+        {
+            new AnswerScoreDto("Тестовый ответ 1", 95),
+            new AnswerScoreDto("Тестовый ответ 2", 87),
+            new AnswerScoreDto("Тестовый ответ 3", 76)
+        };
         var response = new ResponseDto(recommendations);
         
         return await Task.FromResult(Ok(response));
@@ -44,7 +50,7 @@ public class SupportController : ControllerBase
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
         
         
-        string message = "Карта заблокирована - что делать??";
+        string message = "Карта сломалась пополам - что делать??";
         
         try
         {
