@@ -1,3 +1,5 @@
 namespace SupportApi.Models.Dto;
 
-public record ResponseDto(List<string> Recomendations);
+public record AnswerScoreDto(string Answer, int Score);
+
+public record ResponseDto(List<AnswerScoreDto> Recommendations);

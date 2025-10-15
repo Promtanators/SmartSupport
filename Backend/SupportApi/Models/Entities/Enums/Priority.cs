@@ -1,4 +1,4 @@
-﻿namespace SupportApi.Models.Entities.Enums;
+namespace SupportApi.Models.Entities.Enums;
 
 public enum Priority
 {
