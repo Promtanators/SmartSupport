@@ -1,10 +1,10 @@
 import { useState } from "react";
-import UserPage from "../pages/UserPage";
-import { SupportPage } from "../pages";
+import UserPage from "./pages/UserPage";
+import { SupportPage } from "./pages";
 
 function App() {
   const [currentPage, setCurrentPage] = useState(0);
-  // const [message, setMessage] = useState("");
+   const [message, setMessage] = useState(""); 
 
   const handleClick = () => {
     console.log("Кнопка нажата");
@@ -13,8 +13,14 @@ function App() {
 
   return (
     <>
-      {currentPage === 0 && <UserPage handleClick={handleClick} />}
-      {currentPage === 1 && <SupportPage />}
+      {currentPage === 0 && (
+        <UserPage
+          handleClick={handleClick}
+          message={message}
+          setMessage={setMessage}
+        />
+      )}
+      {currentPage === 1 && <SupportPage message={message} />}
     </>
   );
 }
