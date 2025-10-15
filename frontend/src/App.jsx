@@ -1,7 +1,7 @@
 import { useState } from "react";
 import UserPage from "../pages/UserPage";
 import { SupportPage } from "../pages";
-
+// npm install react-tsparticles tsparticles-slim библиотеки для анимации для первой страницы
 function App() {
   const [currentPage, setCurrentPage] = useState(0);
 
