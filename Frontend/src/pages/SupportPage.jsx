@@ -9,6 +9,8 @@ import {
   Col,
   Modal,
   Tag,
+  Spin,
+  Alert,
 } from "antd";
 import {
   SendOutlined,
@@ -16,46 +18,7 @@ import {
   CustomerServiceOutlined,
   CommentOutlined,
 } from "@ant-design/icons";
-
-const serverData = {
-  recommendations: [
-    {
-      answer:
-        "Стать клиентом ВТБ (Беларусь) можно онлайн через сайт vtb.by или мобильное приложение VTB mBank. Для регистрации потребуются паспорт и номер телефона. После регистрации через МСИ (Межбанковскую систему идентификации) вы получите доступ к банковским услугам. .",
-      score: 85,
-    },
-    {
-      answer:
-        "МСИ позволяет пройти идентификацию онлайн, используя данные других банков, где вы уже являетесь клиентом. Это упрощает процедуру регистрации и делает её быстрой и безопасной..",
-      score: 97,
-    },
-    {
-      answer:
-        "Для регистрации в качестве нового клиента необходим паспорт гражданина Республики Беларусь и контактный номер мобильного телефона для получения SMS-подтверждений. ",
-      score: 55,
-    },
-    {
-      answer:
-        "Стать клиентом ВТБ (Беларусь) можно онлайн через сайт vtb.by или мобильное приложение VTB mBank. Для регистрации потребуются паспорт и номер телефона. После регистрации через МСИ (Межбанковскую систему идентификации) вы получите доступ к банковским услугам. .",
-      score: 15,
-    },
-    {
-      answer:
-        "После регистрации вы получите логин и пароль для входа в систему Интернет-банк. При первом входе рекомендуется изменить временный пароль на постоянный и настроить дополнительные параметры безопасности. ",
-      score: 78,
-    },
-    {
-      answer:
-        "Мобильное приложение VTB mBank можно скачать в App Store для iOS или Google Play для Android. После установки войдите с логином и паролем от Интернет-банка и пройдите первоначальную настройку.",
-      score: 90,
-    },
-    {
-      answer:
-        "Если не получается войти в Интернет-банк, проверьте правильность ввода логина и пароля. При забытом пароле воспользуйтесь функцией восстановления. Если проблема не решается, обратитесь в контакт-центр по номеру 250 или +375 (17/29/33) 309 15 15. Вы можете получить онлайн-консультацию (в текстовом формате) в будние дни с 9:00 до 17:30, написав специалисту банка в Telegram либо в чат на сайте (ссылки на сайте банка).",
-      score: 77,
-    },
-  ],
-};
+import { fetchData } from "../api";
 
 const RecommendationCard = ({ recommendation, onClick, isActive }) => {
   const getTagColor = (score) => {
@@ -93,14 +56,20 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
   );
 };
 
-export default function SupportOperatorPage({ message }) {
+export default function SupportOperatorPage({
+  message,
+  data,
+  error,
+  setData,
+  setError,
+}) {
   const [supportInput, setSupportInput] = useState("");
-  const [isActive, setIsActive] = useState(true);
   const [messages, setMessages] = useState(() =>
     message ? [{ id: Date.now(), text: message, sender: "user" }] : []
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userInput, setUserInput] = useState("");
+  const [loadingRec, setLoadingRec] = useState(true);
   const messagesEndRef = useRef(null);
 
   const addMessage = (text, sender) => {
@@ -112,15 +81,38 @@ export default function SupportOperatorPage({ message }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (data || error) {
+      const timer = setTimeout(() => setLoadingRec(false), 2500);
+      return () => clearTimeout(timer);
+    }
+    if (!data && !error) {
+      setLoadingRec(true);
+    }
+  }, [data, error]);
+
   const handleSend = () => {
     addMessage(supportInput, "operator");
     setSupportInput("");
   };
 
-  const handleSendUserReply = () => {
+  const handleSendUserReply = async () => {
+    if (!userInput.trim()) return;
     addMessage(userInput, "user");
     setIsModalOpen(false);
-    setUserInput("Спасибо, вы мне очень помогли!");
+    setUserInput("");
+
+    try {
+      setLoadingRec(true);
+      const result = await fetchData(userInput);
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError("Ошибка при получении подсказок");
+      console.error(err);
+    } finally {
+      setLoadingRec(false);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -187,21 +179,18 @@ export default function SupportOperatorPage({ message }) {
             </div>
             <div style={styles.inputArea}>
               <Input.TextArea
-                placeholder={
-                  isActive ? "Введите ответ клиенту..." : "Диалог завершен."
-                }
+                placeholder={"Введите ответ клиенту..."}
                 value={supportInput}
                 onChange={(e) => setSupportInput(e.target.value)}
                 onKeyDown={handleKeyPress}
                 autoSize={{ minRows: 1, maxRows: 5 }}
-                disabled={!isActive}
                 style={{ flex: 1 }}
               />
               <Button
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={handleSend}
-                disabled={!supportInput.trim() || !isActive}
+                disabled={!supportInput.trim()}
                 style={{ marginRight: 8 }}
               >
                 Ответить
@@ -209,17 +198,9 @@ export default function SupportOperatorPage({ message }) {
               <Button
                 icon={<CommentOutlined />}
                 onClick={() => setIsModalOpen(true)}
-                disabled={!isActive}
                 style={{ marginRight: 8 }}
               >
                 Клиент
-              </Button>
-              <Button
-                danger
-                onClick={() => setIsActive(false)}
-                disabled={!isActive}
-              >
-                Завершить
               </Button>
             </div>
           </Card>
@@ -231,16 +212,46 @@ export default function SupportOperatorPage({ message }) {
             style={styles.templateCard}
             styles={{ body: { overflowY: "auto", padding: "16px" } }}
           >
-            {serverData.recommendations
-              .sort((a, b) => b.score - a.score)
-              .map((rec, index) => (
-                <RecommendationCard
-                  key={index}
-                  recommendation={rec}
-                  onClick={setSupportInput}
-                  isActive={isActive}
-                />
-              ))}
+            {loadingRec && (
+              <div style={{ textAlign: "center", padding: 32, height: "100%" }}>
+                <Spin size="large" />
+                <Typography.Text style={{ display: "block", marginTop: 16 }}>
+                  Ищем ответ...
+                </Typography.Text>
+              </div>
+            )}
+
+            {!loadingRec && error && (
+              <Alert
+                message="Ошибка загрузки"
+                description={error}
+                type="error"
+                showIcon
+                style={{ margin: "16px 0" }}
+              />
+            )}
+
+            {!loadingRec &&
+              data?.recommendations
+                ?.sort((a, b) => b.score - a.score)
+                .map((rec, index) => (
+                  <RecommendationCard
+                    key={index}
+                    recommendation={rec}
+                    onClick={setSupportInput}
+                    isActive={!loadingRec && !error}
+                  />
+                ))}
+
+            {!loadingRec &&
+              !error &&
+              (!data ||
+                !data.recommendations ||
+                data.recommendations.length === 0) && (
+                <Typography.Text type="secondary">
+                  К сожалению, не сможем подсказать.
+                </Typography.Text>
+              )}
           </Card>
         </Col>
       </Row>
