@@ -177,7 +177,7 @@ export default function SupportOperatorPage({ message }) {
                       <Avatar
                         size="small"
                         icon={<CustomerServiceOutlined />}
-                        style={{ marginLeft: 8 }}
+                        style={{ marginLeft: 8, flexShrink: 0 }}
                       />
                     )}
                   </div>
