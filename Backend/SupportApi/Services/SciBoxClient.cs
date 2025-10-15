@@ -35,7 +35,34 @@ public class SciBoxClient
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         });
     }
+    
+    
+    public async Task<string> GetEmbedding(
+        string userInput
+    )
+    {
+        var payload = new
+        {
+            model =  ModelNameBge,
+            input =  userInput
+        };
 
+        var json = JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync($"{ApiBaseUrl}/v1/embeddings ", content);
+        response.EnsureSuccessStatusCode();
+        
+        var responseString = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(responseString);
+
+        var embedding = doc.RootElement
+            .GetProperty("data")[0]
+            .GetProperty("embedding")
+            .ToString();
+        
+        return embedding;
+    }
     public async Task<string> GetModels()
     {
         var response = await _httpClient.GetAsync($"{ApiBaseUrl}/models");
