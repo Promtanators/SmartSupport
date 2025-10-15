@@ -14,7 +14,6 @@ public class SupportDbContext : DbContext
     }
 
     public DbSet<BankFaq> BankFaqs { get; set; }
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<BankFaq>(entity =>

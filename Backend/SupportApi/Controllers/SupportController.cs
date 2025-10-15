@@ -3,6 +3,7 @@ using SupportApi.Data;
 using SupportApi.Models.Dto;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Recommendations;
+using Microsoft.EntityFrameworkCore;
 using SupportApi.Models.Entities;
 
 namespace SupportApi.Controllers;
@@ -42,16 +43,42 @@ public class SupportController : ControllerBase
         
         return await Task.FromResult(Ok(response));
     }
+    
+    [HttpGet("update")]
+    public async Task<IActionResult> Update()
+    {
+        try
+        {
+            foreach (var dbBankFaq in _db.BankFaqs)
+            {
+                var question = dbBankFaq.ExampleQuestion;
+
+                var embedding = await _sciBoxClient.GetEmbedding(question);
+
+                dbBankFaq.ExampleEmbedding = embedding;
+            }
+        }
+        catch (Exception ex)
+        {
+            return await Task.FromResult(Ok("Error while updating embedding column: " + ex.Message)); 
+        }
+        finally
+        {
+            await _db.SaveChangesAsync();
+        }
+
+        return await Task.FromResult(Ok("Database updated successfully"));
+    }
 
     [HttpGet("all")]
     public async Task<IActionResult> GetAll()
     {
         var faqs = _db.BankFaqs.ToList();
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        
-        
-        string message = "Карта сломалась пополам - что делать??";
-        
+
+
+        string message = "При оформлении вклада в каком случае нужно платить подоходный налог?";
+
         try
         {
             var startWaiting = DateTime.UtcNow;

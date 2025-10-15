@@ -33,8 +33,6 @@ public class RecommendationsGenerator
                     .ToList()
             );
         
-        
-        
         var targetAudiences = await _bankFaqs
             .Select(b => b.TargetAudience)
             .Distinct()
@@ -47,7 +45,6 @@ public class RecommendationsGenerator
 
         var startWaiting = DateTime.UtcNow;
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
-        Console.WriteLine($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
 
         try
         {
@@ -72,11 +69,6 @@ public class RecommendationsGenerator
 
             Console.WriteLine($"Сущности: [{mainCategory}, {subCategory}, {targetCategory}]");
 
-            if (string.IsNullOrWhiteSpace(mainCategory) &&
-                string.IsNullOrWhiteSpace(subCategory) &&
-                string.IsNullOrWhiteSpace(targetCategory))
-                throw new DataException($"No recommendations found for `{message}`");
-
             return await _GetAnswers((mainCategory, subCategory, targetCategory), message);
         }
         catch (Exception ex)
@@ -85,25 +77,19 @@ public class RecommendationsGenerator
         }
     }
 
-
-
     private async Task<List<AnswerScoreDto>> _GetAnswers(
         (string? MainCategory, string? SubCategory, string? TargetAudience) keys,
         string message)
     {
         var rightAnswers = await _bankFaqs
             .Where(b => keys.MainCategory == null || b.MainCategory == keys.MainCategory)
-            .Where(b => keys.SubCategory == null || b.Subcategory == keys.SubCategory)
             .Where(b => keys.TargetAudience == null || b.TargetAudience == keys.TargetAudience)
             .Select(b => b.TemplateResponse)
             .Distinct()
             .OrderBy(t => t)
             .Take(MaxTemplates)
             .ToListAsync();
-        foreach (var b in _bankFaqs)
-        {
-            Console.WriteLine($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
-        }
+        
         if(rightAnswers.Count == 0) throw new DataException("No recommendations found for `" + message + "`");
         Console.WriteLine($"rightAnswers: {JsonSerializer.Serialize(
             rightAnswers,
@@ -112,7 +98,6 @@ public class RecommendationsGenerator
 
         var startWaiting = DateTime.UtcNow;
         var response = await _sciBoxClient.Ask(_BuildAnswersPrompt(rightAnswers), message);
-        Console.WriteLine($"Шаг 2: Рекомендации по сущностям за {(DateTime.UtcNow - startWaiting).Seconds}c");
         
         List<List<int>>? lists;
         try
@@ -180,8 +165,6 @@ public class RecommendationsGenerator
         return sb.ToString();
     }
 
-
-    
     private string _BuildAnswersPrompt(IEnumerable<string> answers)
     {
         var sb = new System.Text.StringBuilder();
