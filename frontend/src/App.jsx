@@ -12,7 +12,7 @@ function App() {
 
   return (
     <>
-      {currentPage === 0 && <UserPage onNext={handleClick} />}
+      {currentPage === 0 && <UserPage handleClick={handleClick} />}
       {currentPage === 1 && <SupportPage />}
     </>
   );
