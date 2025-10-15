@@ -48,7 +48,7 @@ public class SupportController : ControllerBase
             {
                 var question = dbBankFaq.ExampleQuestion;
 
-                var embedding = await _sciBoxClient.GetEmbedding(question);
+                var embedding = await _sciBoxClient.GetEmbeddingAsync(question);
 
                 dbBankFaq.ExampleEmbedding = embedding;
             }
@@ -72,7 +72,7 @@ public class SupportController : ControllerBase
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
 
 
-        string message = "При оформлении вклада в каком случае нужно платить подоходный налог?";
+        string message = "Как стать клиентом банка?";
 
         try
         {

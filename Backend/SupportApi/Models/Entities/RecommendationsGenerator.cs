@@ -35,50 +35,66 @@ public class RecommendationsGenerator
                     .ToList()
             );
 
-        var mainCategory = await _GetEntities(categoryTree, message);
+        var mainCategoryTask = _GetMainCategoryAsync(categoryTree, message);
+        var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
 
+        await Task.WhenAll(mainCategoryTask, messageEmbTask);
+        
+        var mainCategory = mainCategoryTask.Result;
+        var messageEmb = JsonSerializer.Deserialize<double[]>(messageEmbTask.Result);
+
+        if (messageEmb is null) throw new DataException("Cant get embeddings for message");
+        if (mainCategory is null) throw new DataException($"Cant get {MainCategoryLabel} for message");
+        
         var bankFaqs = await _bankFaqs
             .Where(b => b.MainCategory == mainCategory)
             .ToListAsync();
 
-
+        var ratedAnswers = _RateByEmbedding(bankFaqs, messageEmb);
+        return await _GetAnswersAsync(ratedAnswers, message);
     }
     
-    private async Task<Dictionary<string,double>> _FilterByEmbedding(List<BankFaq> bankFaqs, string message)
+    private List<(string answer, int score)> _RateByEmbedding(
+        List<BankFaq> bankFaqs,
+        double[] messageEmb)
     {
-        Dictionary<string, double> embeddingValues = new();
+        List<(string answer, int score)> ratedAnswers = new();
         
         foreach (var bankFaq in bankFaqs)
         {
             var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding);
-            MathOperations.CosineSimilarity();
+            if (embedding is null)
+                throw new JsonException($"Cant deserialize embedding for example `{bankFaq.ExampleQuestion}");
+            var score = MathOperations.CosineSimilarity(embedding, messageEmb);
+            ratedAnswers.Add((answer: bankFaq.TemplateResponse, (int)(score*100)));
         }
 
-        return embeddingValues;
+        return ratedAnswers
+            .OrderByDescending(a => a.score)
+            .Distinct()
+            .Take(MaxTemplates)
+            .ToList();
     } 
     
-    
-    
-    
 
-    public async Task<string?> _GetEntities(
+    public async Task<string?> _GetMainCategoryAsync(
         Dictionary<string, List<string>> categoryTree,
         string message)
     {
         var mainCategories = categoryTree.Keys.ToList();
-        var systemPrompt = _BuildEntitiesPrompt(mainCategories, message);
+        var systemPrompt = _BuildMainCategoryPrompt(mainCategories);
 
         var startWaiting = DateTime.UtcNow;
-        Logger.Log($"Запрос сущностей: {systemPrompt}");
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
-        Logger.Log($"ОТвет: {answer}");
         Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
             var index = int.Parse(answer);
             if (index < 0) return null;
+            var mainCategory = mainCategories[index];
             
-            return mainCategories[index];
+            Logger.Log($"Главная категория: {mainCategory}");
+            return mainCategory;
         }
         catch (Exception ex)
         {
@@ -86,94 +102,53 @@ public class RecommendationsGenerator
         }
     }
 
-    private async Task<List<AnswerScoreDto>> _GetAnswers(
-        (string? MainCategory, string? SubCategory, string? TargetAudience) keys,
+    private async Task<List<AnswerScoreDto>> _GetAnswersAsync(
+        List<(string answer, int score)> ratedAnswers,
         string message)
     {
-        var rightAnswers = await _bankFaqs
-            .Where(b => keys.MainCategory == null || b.MainCategory == keys.MainCategory)
-            .Where(b => keys.SubCategory == null || b.Subcategory == keys.SubCategory)
-            .Where(b => keys.TargetAudience == null || b.TargetAudience == keys.TargetAudience)
-            .Select(b => b.TemplateResponse)
-            .Distinct()
-            .OrderBy(t => t)
-            .Take(MaxTemplates)
-            .ToListAsync();
-        // foreach (var b in _bankFaqs)
-        // {
-        //     Logger.LogInformation($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
-        // }
-        if(rightAnswers.Count == 0) throw new DataException("No recommendations found for `" + message + "`");
-        Logger.LogJson("rightAnswers", rightAnswers);
-
-        var startWaiting = DateTime.UtcNow;
-        var response = await _sciBoxClient.Ask(_BuildAnswersPrompt(rightAnswers), message);
-        Logger.LogInformation($"Шаг 2: Рекомендации по сущностям за {(DateTime.UtcNow - startWaiting).Seconds}c");
+        var systemPrompt = _BuildAnswersPrompt(ratedAnswers);
+        var response = await _sciBoxClient.Ask(systemPrompt, message);
         
-        List<List<int>>? lists;
-        try
+        var indexes = JsonSerializer.Deserialize<List<int>>(response);
+        if(indexes is null || indexes.Count == 0) throw new DataException("Cant get answers for message");
+        Logger.LogJson("indexes", indexes);
+        
+        var chosenAnswers = new List<AnswerScoreDto>();
+        foreach (var index in indexes)
         {
-            lists = JsonSerializer.Deserialize<List<List<int>>>(response);
+            chosenAnswers.Add(new AnswerScoreDto(ratedAnswers[index].answer, ratedAnswers[index].score));
         }
-        catch (Exception ex)
-        {
-            throw new JsonException("Model returned bad json: " + response + ex);
-        }
-
-        if (lists is null || lists.Count != 2)
-            throw new DataException("Model returned bad json lists: " + response);
-
-        var indices = lists[0];
-        var scores = lists[1];
-
-        if (indices.Count != scores.Count)
-            throw new DataException("Indices and scores counts do not match");
-
-        var recommendations = indices
-            .Select((idx, i) => new AnswerScoreDto(rightAnswers[idx], scores[i]))
-            .ToList();
-
-        Logger.LogJson("Ответы", recommendations);
-        return recommendations;
+        return chosenAnswers;
     }
 
-    private string _BuildEntitiesPrompt(
-        List<string> mainCategories,
-        string message)
+    private string _BuildMainCategoryPrompt(
+        List<string> mainCategories)
     {
         var sb = new System.Text.StringBuilder();
 
-        sb.AppendLine($"Для вопроса `{message}` выдели основную категорию из массива");
+        sb.AppendLine("Для любого запроса пользователя выдели основную категорию из массива");
         sb.AppendLine($"[{string.Join(",", mainCategories)}]");
         sb.AppendLine("В ответ пришли строго одно число - индекс категории из массива от нуля");
         sb.AppendLine("если подходящей категории нет, верни -1");
 
         return sb.ToString();
     }
-
-
-
     
-    private string _BuildAnswersPrompt(IEnumerable<string> answers)
+    
+    private string _BuildAnswersPrompt(List<(string answer, int score)> ratedAnswers)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("Выбери подходящие ответы и верни строго JSON-массив из двух массивов: [indices, scores]. ");
-        sb.Append("Первый элемент — массив индексов выбранных ответов (начиная с 0). ");
-        sb.Append("Второй элемент — массив соответствующих процентов пригодности (целые 0-100). ");
-        sb.Append("Ни слов, ни пояснений, ничего кроме JSON-массива. Пример: [[0,2,3],[90,70,50]]\n\n");
+        sb.Append("Для запроса пользователя выбирай подходящие ответы и верни строго JSON-массив подходящих индексов.\n");
+        sb.Append("Ни слов, ни пояснений, ничего кроме JSON-массива. Пример: [0,2,3] или [] или [2]\n\n");
         sb.Append("Варианты (не менять):\n");
         
         int index = 0;
-        foreach (var answer in answers)
+        foreach (var answer in ratedAnswers)
         {
-            var text = string.IsNullOrWhiteSpace(answer) ? "-" : answer.Trim();
+            var text = string.IsNullOrWhiteSpace(answer.answer) ? "-" : answer.answer.Trim();
             sb.Append(index).Append(": ").Append(text).Append('\n');
             index++;
         }
         return sb.ToString();
     }
-
-
-
-
 }

@@ -11,7 +11,7 @@ public class BankFaq
     public string TargetAudience  { get; set; }
     public string TemplateResponse   { get; set; }
     
-    public string? ExampleEmbedding { get; set; }
+    public string ExampleEmbedding { get; set; }
     public BankFaq(
         string mainCategory,
         string subcategory, 
