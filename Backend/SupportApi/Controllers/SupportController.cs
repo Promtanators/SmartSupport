@@ -39,6 +39,17 @@ public class SupportController : ControllerBase
         return await Task.FromResult(Ok(response));
     }
     
+    [HttpPost("fastask")]
+    public async Task<IActionResult> FastAsk([FromBody] AskDto dto)
+    {
+        var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
+        var recommendations = await gen.GetRecommendationsFast(dto.Message);
+        
+        var response = new ResponseDto(recommendations);
+        
+        return await Task.FromResult(Ok(response));
+    }
+    
     [HttpGet("update")]
     public async Task<IActionResult> Update()
     {

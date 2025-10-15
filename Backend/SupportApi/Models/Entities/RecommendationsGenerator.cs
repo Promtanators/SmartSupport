@@ -24,6 +24,35 @@ public class RecommendationsGenerator
         _sciBoxClient = sciBoxClient;
     }
 
+    public async Task<List<AnswerScoreDto>> GetRecommendationsFast(string message)
+    {
+        string userEmbedding = await _sciBoxClient.GetEmbeddingAsync(message);
+        double[] embeddingResult = JsonSerializer.Deserialize<double[]>(userEmbedding) 
+                                   ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");
+        
+        
+        List<(string TemplateResponse, double matchIndex)> embeddingValues = new();
+        
+        foreach (var bankFaq in _bankFaqs)
+        {
+            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding) 
+                            ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");;
+            
+            double match = MathOperations.CosineSimilarity(embeddingResult, embedding);
+            
+            embeddingValues.Add((bankFaq.TemplateResponse, match));
+        }
+        
+        var matchList = embeddingValues
+            .OrderByDescending(x => x.Item2)
+            .Take(MaxTemplates)
+            .ToList();
+        
+        return matchList
+            .Select(x => new AnswerScoreDto(x.TemplateResponse, (int)(x.matchIndex * 100)))
+            .ToList();
+    }
+    
     public async Task<List<AnswerScoreDto>> GetRecommendations(string message)
     {
         var categoryTree = await _bankFaqs
