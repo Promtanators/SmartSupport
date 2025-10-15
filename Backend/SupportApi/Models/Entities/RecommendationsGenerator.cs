@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SupportApi.Data;
 
@@ -13,6 +14,7 @@ public class RecommendationsGenerator
 
     public async Task<List<string>> GetRecommendations (string message)
     {
+        var listRecommendations = new List<string>();
         var mainCategories = _bankFaqs
             .Select(b => b.MainCategory)
             .Distinct()
@@ -33,10 +35,17 @@ public class RecommendationsGenerator
         var client = new SciBoxClient(token);
         var answer = await client.Ask("Ты выбираешь на каждое сообщение пользователя 1 ключевое слово" +
                                       " из каждого списка, если ключевое слово не найдено, то напиши " +
-                                      "-. Ответ оформи в json формат, пример: {MainCategory: что-то из первого списка, Subcategory:" +
+                                      "-. Ответ оформи в json формат, пример: {MainCategory: что-то из первого списка, SubCategory:" +
                                       " что-то из второго списка, TargetAudience: что-то из третьего списка}. Вот списки: "
                                       + mainCategoriesString + "|" + subCategoriesString + "|" + targetAudiencesString, message);
-        Console.WriteLine(answer);
-        return new ();
+        var jsonAnswer = JsonDocument.Parse(answer);
+        listRecommendations[0] = jsonAnswer.RootElement.GetProperty("MainCategory").GetString();
+        listRecommendations[1] = jsonAnswer.RootElement.GetProperty("SubCategory").GetString();
+        listRecommendations[2] = jsonAnswer.RootElement.GetProperty("TargetAudience").GetString();
+        if (listRecommendations.Contains("-"))
+        {
+            listRecommendations.Add("Ответ не найден в базе знаний");
+        }
+        return listRecommendations;
     }
 }
