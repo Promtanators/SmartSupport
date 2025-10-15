@@ -37,9 +37,7 @@ public class SciBoxClient
     }
     
     
-    public async Task<string> GetEmbedding(
-        string userInput
-    )
+    public async Task<string> GetEmbedding(string userInput)
     {
         var payload = new
         {

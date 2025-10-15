@@ -1,8 +1,10 @@
 using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using SupportApi.Data;
 using SupportApi.Models.Dto;
+using SupportApi.Models.Entities;
 
 namespace SupportApi.Models.Entities;
 
@@ -33,24 +35,39 @@ public class RecommendationsGenerator
                     .ToList()
             );
 
-        var entities = await _GetEntities(categoryTree, message);
-        return await _GetAnswers(entities, message);
-    }
+        var mainCategory = await _GetEntities(categoryTree, message);
 
-    public async Task<(string? MainCategory, string? SubCategory, string? TargetAudience)> _GetEntities(
+        var bankFaqs = await _bankFaqs
+            .Where(b => b.MainCategory == mainCategory)
+            .ToListAsync();
+
+
+    }
+    
+    private async Task<Dictionary<string,double>> _FilterByEmbedding(List<BankFaq> bankFaqs, string message)
+    {
+        Dictionary<string, double> embeddingValues = new();
+        
+        foreach (var bankFaq in bankFaqs)
+        {
+            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding);
+            MathOperations.CosineSimilarity();
+        }
+
+        return embeddingValues;
+    } 
+    
+    
+    
+    
+
+    public async Task<string?> _GetEntities(
         Dictionary<string, List<string>> categoryTree,
         string message)
     {
-        var targetAudiences = await _bankFaqs
-            .Select(b => b.TargetAudience)
-            .Distinct()
-            .ToListAsync();
-        
         var mainCategories = categoryTree.Keys.ToList();
-        var subCategories = categoryTree.Values.SelectMany(subs => subs).Distinct().ToList();
+        var systemPrompt = _BuildEntitiesPrompt(mainCategories, message);
 
-        var systemPrompt = _BuildEntitiesPrompt(categoryTree, targetAudiences, message);
-        
         var startWaiting = DateTime.UtcNow;
         Logger.Log($"Запрос сущностей: {systemPrompt}");
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
@@ -58,33 +75,10 @@ public class RecommendationsGenerator
         Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
-            var indexes = JsonSerializer.Deserialize<List<int>>(answer);
-            if (indexes == null || indexes.Count < 3)
-                throw new DataException("Model returned invalid JSON: " + answer);
-
-            int mainIndex = indexes[0];
-            int subIndex = indexes[1];
-            int targetIndex = indexes[2];
-
-            if (mainIndex < -1 || mainIndex >= mainCategories.Count)
-                throw new DataException($"{MainCategoryLabel} index out of range: {mainIndex}");
-            if (subIndex < -1 || subIndex >= subCategories.Count)
-                throw new DataException($"{SubCategoryLabel} index out of range: {subIndex}");
-            if (targetIndex < -1 || targetIndex >= targetAudiences.Count)
-                throw new DataException($"{TargetAudienceLabel} index out of range: {targetIndex}");
-
-            string? mainCategory = mainIndex >= 0 ? mainCategories[mainIndex] : null;
-            string? subCategory = subIndex >= 0 ? subCategories[subIndex] : null;
-            string? targetCategory = targetIndex >= 0 ? targetAudiences[targetIndex] : null;
-
-            Logger.LogInformation($"Сущности: [{mainCategory}, {subCategory}, {targetCategory}]");
-
-            if (string.IsNullOrWhiteSpace(mainCategory) &&
-                string.IsNullOrWhiteSpace(subCategory) &&
-                string.IsNullOrWhiteSpace(targetCategory))
-                throw new DataException($"No recommendations found for `{message}`");
-
-            return (mainCategory, subCategory, targetCategory);
+            var index = int.Parse(answer);
+            if (index < 0) return null;
+            
+            return mainCategories[index];
         }
         catch (Exception ex)
         {
@@ -144,41 +138,17 @@ public class RecommendationsGenerator
     }
 
     private string _BuildEntitiesPrompt(
-        Dictionary<string, List<string>> categoryTree,
-        List<string> targetAudiences,
+        List<string> mainCategories,
         string message)
     {
         var sb = new System.Text.StringBuilder();
 
-        sb.AppendLine($"Выбери для каждой сущности индекс подходящего значения для вопроса:\n`{message}` ");
-        sb.AppendLine("и верни строго JSON-массив целых чисел");
-        sb.AppendLine($"в формате [{MainCategoryLabel}Index , {SubCategoryLabel}Index, {TargetAudienceLabel}Index]");
-        sb.AppendLine("Индексы начинаются с 0. Если для сущности нет подходящего значения — используй -1.");
-        sb.AppendLine("Подкатегорию можно выбирать только из подкатегорий выбранной главной категории.");
-        sb.AppendLine("Ничего кроме JSON-массива не возвращай. Пример: [0,2,-1]");
-        sb.AppendLine();
+        sb.AppendLine($"Для вопроса `{message}` выдели основную категорию из массива");
+        sb.AppendLine($"[{string.Join(",", mainCategories)}]");
+        sb.AppendLine("В ответ пришли строго одно число - индекс категории из массива от нуля");
+        sb.AppendLine("если подходящей категории нет, верни -1");
 
-        var mainCategories = categoryTree.Keys.ToList();
-        
-        var jsonObj = new
-        {
-            MainCategory = mainCategories.Select((cat, i) => new { Index = i, Name = cat }).ToList(),
-            SubCategory = mainCategories.Select((cat, i) => new
-            {
-                MainIndex = i,
-                Subs = categoryTree[cat].Select((sub, j) => new { Index = j, Name = sub }).ToList()
-            }).ToList(),
-            TargetAudience = targetAudiences.Select((ta, i) => new { Index = i, Name = ta }).ToList()
-        };
-        
-        return sb.ToString() + JsonSerializer.Serialize(
-            jsonObj,
-            new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            }
-        );
+        return sb.ToString();
     }
 
 
