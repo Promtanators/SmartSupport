@@ -1,13 +1,27 @@
-import { useState, useEffect, useRef } from "react";
-import { Card, Input, Button, Avatar, Typography, Row, Col } from "antd";
-import { SendOutlined, UserOutlined, RobotOutlined } from "@ant-design/icons";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Card,
+  Input,
+  Button,
+  Avatar,
+  Typography,
+  Row,
+  Col,
+  Modal,
+  Divider,
+} from "antd";
+import { SendOutlined, UserOutlined, RobotOutlined, CommentOutlined } from "@ant-design/icons";
 
 const { Text, Title } = Typography;
 
+// Добавим имя оператора для большей реалистичности
+const OPERATOR_NAME = "Антон";
+
 const cannedResponses = [
   {
+    // ИЗМЕНЕНИЕ: Вставляем имя оператора в шаблон
     title: "Стандартное приветствие",
-    text: "Добрый день! Меня зовут [Имя Оператора], чем могу помочь?",
+    text: `Добрый день! Меня зовут ${OPERATOR_NAME}, чем могу помочь?`,
   },
   {
     title: "Уточнение по карте",
@@ -39,16 +53,17 @@ const cannedResponses = [
   },
 ];
 
-export default function SupportOperatorPage() {
+// ПРИНИМАЕТ initialMessages как проп, который должен быть массивом с первым сообщением клиента
+export default function SupportOperatorPage({ initialMessages = [] }) { 
   const [message, setMessage] = useState("");
   const [isChatActive, setIsChatActive] = useState(true);
-  const [chatMessages, setChatMessages] = useState([
-    {
-      id: 1,
-      text: "Здравствуйте, не могу найти выписку по карте за прошлый месяц. Помогите, пожалуйста.",
-      sender: "user",
-    },
-  ]);
+  
+  // Инициализируем сообщения переданным массивом (с сообщением клиента)
+  const [chatMessages, setChatMessages] = useState(initialMessages); 
+  
+  // Состояния для модального окна ответа клиента
+  const [isUserReplyModalVisible, setIsUserReplyModalVisible] = useState(false);
+  const [userReplyText, setUserReplyText] = useState("Спасибо, вы мне очень помогли!"); 
 
   const messagesEndRef = useRef(null);
 
@@ -56,6 +71,18 @@ export default function SupportOperatorPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // !!! ИСПРАВЛЕНИЕ !!!: Используем useEffect, чтобы гарантировать, что
+  // если initialMessages изменится (включая первое обновление при монтировании),
+  // состояние chatMessages будет установлено правильно.
+  useEffect(() => {
+    // Проверяем, что массив не пуст и он отличается от текущего состояния
+    // Это исправляет проблему с отображением первого сообщения клиента
+    if (initialMessages.length > 0) {
+      setChatMessages(initialMessages);
+    }
+  }, [initialMessages]);
+  
+  // Эффект для прокрутки вниз
   useEffect(scrollToBottom, [chatMessages]);
 
   const handleTemplateClick = (text) => {
@@ -66,6 +93,8 @@ export default function SupportOperatorPage() {
 
   const handleSend = () => {
     if (message.trim() === "" || !isChatActive) return;
+    
+    // 1. Отправляем сообщение оператора
     const operatorMessage = {
       id: Date.now(),
       text: message,
@@ -73,17 +102,34 @@ export default function SupportOperatorPage() {
     };
     setChatMessages((prev) => [...prev, operatorMessage]);
     setMessage("");
-
-    setTimeout(() => {
-      const userReply = {
-        id: Date.now() + 1,
-        text: "Спасибо, вы мне очень помогли!",
-        sender: "user",
-      };
-      setChatMessages((prev) => [...prev, userReply]);
-      setIsChatActive(false);
-    }, 1500);
   };
+
+  const handleSendUserReply = () => {
+    if (userReplyText.trim() === "") return;
+    
+    const userReply = {
+      id: Date.now() + 1,
+      text: userReplyText,
+      sender: "user",
+    };
+    
+    setChatMessages((prev) => [...prev, userReply]);
+    setUserReplyText("Спасибо, вы мне очень помогли!"); // Сброс на дефолт
+    
+    setIsUserReplyModalVisible(false); // Закрываем модальное окно
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+  
+  const handleEndChat = () => {
+      setIsChatActive(false);
+  };
+
 
   return (
     <div style={styles.pageWrapper}>
@@ -138,6 +184,7 @@ export default function SupportOperatorPage() {
                 }
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
                 autoSize={{ minRows: 1, maxRows: 5 }}
                 disabled={!isChatActive}
                 style={{ flex: 1 }}
@@ -147,7 +194,29 @@ export default function SupportOperatorPage() {
                 icon={<SendOutlined />}
                 onClick={handleSend}
                 disabled={!message.trim() || !isChatActive}
-              />
+                style={{ marginRight: 8 }}
+              >
+                Ответить
+              </Button>
+              
+              <Button
+                icon={<CommentOutlined />}
+                onClick={() => setIsUserReplyModalVisible(true)}
+                disabled={!isChatActive}
+                title="Имитировать ответ клиента"
+                style={{ marginRight: 8 }}
+              >
+                Клиент
+              </Button>
+              
+              <Button
+                danger
+                onClick={handleEndChat}
+                disabled={!isChatActive}
+                title="Завершить текущий диалог и заблокировать ввод"
+              >
+                Завершить
+              </Button>
             </div>
           </Card>
         </Col>
@@ -178,6 +247,25 @@ export default function SupportOperatorPage() {
           </Card>
         </Col>
       </Row>
+
+      {/* Модальное окно для ввода ответа клиента */}
+      <Modal
+        title="Имитация ответа клиента"
+        open={isUserReplyModalVisible}
+        onOk={handleSendUserReply}
+        onCancel={() => setIsUserReplyModalVisible(false)}
+        okText="Отправить как Клиент"
+        cancelText="Отмена"
+        centered // Добавлен этот пропс для вертикального центрирования
+      >
+        <Input.TextArea
+          placeholder="Введите сообщение от лица клиента..."
+          value={userReplyText}
+          onChange={(e) => setUserReplyText(e.target.value)}
+          autoSize={{ minRows: 3, maxRows: 5 }}
+          style={{ marginTop: 16 }}
+        />
+      </Modal>
     </div>
   );
 }
