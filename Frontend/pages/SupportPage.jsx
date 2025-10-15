@@ -1,14 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Card,
-  Input,
-  Button,
-  Avatar,
-  Typography,
-  Row,
-  Col,
-  Divider,
-} from "antd";
+import { useState, useEffect, useRef } from "react";
+import { Card, Input, Button, Avatar, Typography, Row, Col } from "antd";
 import { SendOutlined, UserOutlined, RobotOutlined } from "@ant-design/icons";
 
 const { Text, Title } = Typography;
@@ -94,13 +85,6 @@ export default function SupportOperatorPage() {
     }, 1500);
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   return (
     <div style={styles.pageWrapper}>
       <Row gutter={16} style={{ height: "100%" }}>
@@ -154,7 +138,6 @@ export default function SupportOperatorPage() {
                 }
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
                 autoSize={{ minRows: 1, maxRows: 5 }}
                 disabled={!isChatActive}
                 style={{ flex: 1 }}

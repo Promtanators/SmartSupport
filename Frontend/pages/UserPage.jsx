@@ -3,9 +3,9 @@ import { SendOutlined, MessageOutlined } from "@ant-design/icons";
 import { useState, useCallback } from "react";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
-import particlesConfig from "./particles-config"; // Конфигурацию вынесем в отдельный файл
+import particlesConfig from "./particles-config"; 
 
-export default function UserPage({ handleClick }) {
+export default function UserPage({ handleClick }, ) {
   const [message, setMessage] = useState("");
 
   const particlesInit = useCallback(async (engine) => {
@@ -17,7 +17,7 @@ export default function UserPage({ handleClick }) {
       <Particles
         id="tsparticles"
         init={particlesInit}
-        options={particlesConfig} // Используем нашу конфигурацию
+        options={particlesConfig} 
         style={{
           position: "absolute",
           top: 0,
