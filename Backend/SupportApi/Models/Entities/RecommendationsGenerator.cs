@@ -47,8 +47,7 @@ public class RecommendationsGenerator
 
         var startWaiting = DateTime.UtcNow;
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
-        Console.WriteLine($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
-
+        Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
             var indexes = JsonSerializer.Deserialize<List<int>>(answer);
@@ -70,7 +69,7 @@ public class RecommendationsGenerator
             string? subCategory = subIndex >= 0 ? subCategories[subIndex] : null;
             string? targetCategory = targetIndex >= 0 ? targetAudiences[targetIndex] : null;
 
-            Console.WriteLine($"Сущности: [{mainCategory}, {subCategory}, {targetCategory}]");
+            Logger.LogInformation($"Сущности: [{mainCategory}, {subCategory}, {targetCategory}]");
 
             if (string.IsNullOrWhiteSpace(mainCategory) &&
                 string.IsNullOrWhiteSpace(subCategory) &&
@@ -102,17 +101,17 @@ public class RecommendationsGenerator
             .ToListAsync();
         foreach (var b in _bankFaqs)
         {
-            Console.WriteLine($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
+            Logger.LogInformation($"[DB] {b.MainCategory} | {b.Subcategory} | {b.TargetAudience}");
         }
         if(rightAnswers.Count == 0) throw new DataException("No recommendations found for `" + message + "`");
-        Console.WriteLine($"rightAnswers: {JsonSerializer.Serialize(
+        Logger.LogInformation($"rightAnswers: {JsonSerializer.Serialize(
             rightAnswers,
             new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
         )}");
 
         var startWaiting = DateTime.UtcNow;
         var response = await _sciBoxClient.Ask(_BuildAnswersPrompt(rightAnswers), message);
-        Console.WriteLine($"Шаг 2: Рекомендации по сущностям за {(DateTime.UtcNow - startWaiting).Seconds}c");
+        Logger.LogInformation($"Шаг 2: Рекомендации по сущностям за {(DateTime.UtcNow - startWaiting).Seconds}c");
         
         List<List<int>>? lists;
         try
@@ -137,7 +136,7 @@ public class RecommendationsGenerator
             .Select((idx, i) => new AnswerScoreDto(rightAnswers[idx], scores[i]))
             .ToList();
 
-        Console.WriteLine($"Ответы: {JsonSerializer.Serialize(
+        Logger.LogInformation($"Ответы: {JsonSerializer.Serialize(
             recommendations,
             new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
         )}");

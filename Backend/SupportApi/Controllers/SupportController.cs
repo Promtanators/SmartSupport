@@ -56,11 +56,12 @@ public class SupportController : ControllerBase
         {
             var startWaiting = DateTime.UtcNow;
             var recommendations = await gen.GetRecommendations(message);
-            Console.WriteLine($"Общее время: {(DateTime.UtcNow - startWaiting).Seconds}c");
+            Logger.LogInformation($"Общее время: {(DateTime.UtcNow - startWaiting).Seconds}c");
             return Ok(recommendations);
         }
         catch (Exception e)
         {
+            Logger.LogError(e, "Ошибка при получении ответов от LLM");
             return Ok($"Ошибка при получении ответов от LLM: {e.Message}");
         }
     }
