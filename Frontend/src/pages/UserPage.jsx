@@ -3,12 +3,25 @@ import { SendOutlined, MessageOutlined } from "@ant-design/icons";
 import Particles from "react-tsparticles";
 import particlesConfig from "./particles-config";
 import { loadSlim } from "tsparticles-slim";
+import { fetchData } from "../api";
 
-export default function UserPage({ onNextPage, message, setMessage }) {
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey && message.trim()) {
-      e.preventDefault();
+export default function UserPage({ onNextPage, message, setMessage, setData }) {
+  const handleSubmit = async () => {
+    if (!message.trim()) return;
+
+    try {
+      const result = await fetchData(message);
+      setData(result);
       onNextPage();
+    } catch (error) {
+      console.error("Ошибка при отправке сообщения:", error);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -41,7 +54,7 @@ export default function UserPage({ onNextPage, message, setMessage }) {
             <Button
               type="primary"
               icon={<SendOutlined />}
-              onClick={onNextPage}
+              onClick={handleSubmit}
               disabled={!message.trim()}
             />
           </div>

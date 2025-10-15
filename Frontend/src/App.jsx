@@ -5,6 +5,7 @@ import { SupportPage } from "./pages";
 function App() {
   const [currentPage, setCurrentPage] = useState(0);
   const [message, setMessage] = useState("");
+  const [data, setData] = useState(null);
 
   return (
     <>
@@ -13,6 +14,7 @@ function App() {
           onNextPage={() => setCurrentPage(1)}
           message={message}
           setMessage={setMessage}
+          setData={setData}
         />
       )}
       {currentPage === 1 && <SupportPage message={message} />}

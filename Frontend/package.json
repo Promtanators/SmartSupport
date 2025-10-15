@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "antd": "^5.27.5",
+    "axios": "^1.12.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-tsparticles": "^2.12.2",
+    "tsparticles": "^3.9.1",
     "tsparticles-slim": "^2.12.0"
   },
   "devDependencies": {
