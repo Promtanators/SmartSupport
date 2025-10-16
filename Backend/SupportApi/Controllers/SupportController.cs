@@ -17,8 +17,6 @@ public class SupportController : ControllerBase
     
     private const string ModelNameQwen = "Qwen2.5-72B-Instruct-AWQ";
     private const string ModelNameBge = "bge-m3";
-    private string message = "Как стать клиентом банка?";
-    private string operatorResponse = "Просто";
 
     public SupportController(SupportDbContext db)
     {
@@ -93,6 +91,7 @@ public class SupportController : ControllerBase
         var faqs = _db.BankFaqs.ToList();
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
         
+        string message = "Как стать клиентом банка?";
 
         try
         {
@@ -108,16 +107,20 @@ public class SupportController : ControllerBase
         }
     }
     [HttpPost("template")]
-    public async Task<IActionResult> SaveToDb()
+    public async Task<IActionResult> SaveToDb([FromBody] TemplateDto dto)
     {
-        var listCategory = _db.BankFaqs
+        var listCategory = _db.BankFaqs 
             .Select(a => a.MainCategory)
             .Distinct()
             .ToList();
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        var mainCategory = gen.GetMainCategoryAsync(listCategory, message).Result;
-        var save = new SaveNewItemToDb(_db.BankFaqs, operatorResponse, message, mainCategory, _sciBoxClient);
-        save.AnalysisAndSave();
+        var mainCategory = await gen.GetMainCategoryAsync(listCategory, dto.Question);
+        if (mainCategory == null)
+        {
+            return StatusCode(500);
+        }
+        var save = new SaveNewItemToDb(_db.BankFaqs, dto.Answer, dto.Question, mainCategory, _sciBoxClient);
+        await save.AnalysisAndSave();
         await _db.SaveChangesAsync();
         return await Task.FromResult(Ok(save));
     }

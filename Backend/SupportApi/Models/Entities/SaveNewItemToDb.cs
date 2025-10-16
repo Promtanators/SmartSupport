@@ -19,18 +19,18 @@ public class SaveNewItemToDb
         _sciBoxClient = sciBoxClient;
     }
 
-    public async void AnalysisAndSave()
+    public async Task AnalysisAndSave()
     {
         var result = await _bankFaqs.Where(a => a.ExampleQuestion.Contains(_userResponse) || a.TemplateResponse.Contains(_operatorResponse)).ToListAsync();
         if (!(result.Count > 0))
         {
-            _SaveToDb(_operatorResponse,  _userResponse);
+            await _SaveToDb(_operatorResponse,  _userResponse);
         }
     }
 
-    private async void _SaveToDb(string operatorResponse,  string userResponse)
+    private async Task _SaveToDb(string operatorResponse,  string userResponse)
     {
-        var embending = _sciBoxClient.GetEmbeddingAsync(userResponse).Result;
+        var embedding = await _sciBoxClient.GetEmbeddingAsync(userResponse);
         var newFaq = new BankFaq
         (
             _mainCategory,
@@ -39,7 +39,7 @@ public class SaveNewItemToDb
             null,
             null,
             operatorResponse,
-            embending
+            embedding
         );
         await _bankFaqs.AddAsync(newFaq);
     }
