@@ -31,7 +31,7 @@ public class RecommendationsGenerator
         double[] embeddingResult = JsonSerializer.Deserialize<double[]>(userEmbedding) 
                                    ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");
         
-        List<(string TemplateResponse, string MainCategory, double matchIndex)> embeddingValues = new();
+        List<(string TemplateResponse, string MainCategory, string SubCategory, string TargetAudience, double matchIndex)> embeddingValues = new();
         
         foreach (var bankFaq in _bankFaqs)
         {
@@ -39,7 +39,7 @@ public class RecommendationsGenerator
                             ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");;
             double match = MathOperations.CosineSimilarity(embeddingResult, embedding);
             
-            embeddingValues.Add((bankFaq.TemplateResponse, bankFaq.MainCategory ,match));
+            embeddingValues.Add((bankFaq.TemplateResponse, bankFaq.MainCategory, bankFaq.Subcategory, bankFaq.TargetAudience ,match));
         }
         
         var matchList = embeddingValues
@@ -48,7 +48,7 @@ public class RecommendationsGenerator
             .ToList();
         
         return matchList
-            .Select(x => new AnswerScoreDto(x.TemplateResponse, (int)(x.matchIndex * 100) , x.MainCategory, "", ""))
+            .Select(x => new AnswerScoreDto(x.TemplateResponse, (int)(x.matchIndex * 100) , x.MainCategory, x.SubCategory, x.TargetAudience))
             .ToList();
     }
     

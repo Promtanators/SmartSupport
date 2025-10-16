@@ -50,7 +50,14 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
         {recommendation.answer}
       </Typography.Text>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: "8px",
+        }}
+      >
         {recommendation.mainCategory && (
           <Tag color="blue">{recommendation.mainCategory}</Tag>
         )}
