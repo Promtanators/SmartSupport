@@ -55,16 +55,12 @@ public class RecommendationsGenerator
     
     public async Task<List<AnswerScoreDto>> GetRecommendations(string message)
     {
-        var categoryTree = await _bankFaqs
-            .GroupBy(b => b.MainCategory)
-            .ToDictionaryAsync(
-                g => g.Key,
-                g => g.Select(b => b.Subcategory)
-                    .Distinct()
-                    .ToList()
-            );
+        var mainCategories = await _bankFaqs
+            .Select(b => b.MainCategory)
+            .Distinct()
+            .ToListAsync();
 
-        var mainCategoryTask = _GetMainCategoryAsync(categoryTree, message);
+        var mainCategoryTask = GetMainCategoryAsync(mainCategories, message);
         var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
 
         await Task.WhenAll(mainCategoryTask, messageEmbTask);
@@ -106,11 +102,10 @@ public class RecommendationsGenerator
     } 
     
 
-    public async Task<string?> _GetMainCategoryAsync(
-        Dictionary<string, List<string>> categoryTree,
+    public async Task<string?> GetMainCategoryAsync(
+        List<string> mainCategories,
         string message)
     {
-        var mainCategories = categoryTree.Keys.ToList();
         var systemPrompt = _BuildMainCategoryPrompt(mainCategories);
 
         var startWaiting = DateTime.UtcNow;
@@ -136,6 +131,13 @@ public class RecommendationsGenerator
         string message)
     {
         var systemPrompt = _BuildAnswersPrompt(ratedAnswers);
+        
+        var candidates = ratedAnswers
+            .Select(a => a.answer)
+            .ToList();
+        
+        Logger.LogJson("Кандидаты", candidates);
+        
         var response = await _sciBoxClient.Ask(systemPrompt, message);
         
         var indexes = JsonSerializer.Deserialize<List<int>>(response);
@@ -150,27 +152,45 @@ public class RecommendationsGenerator
         return chosenAnswers;
     }
 
-    private string _BuildMainCategoryPrompt(
-        List<string> mainCategories)
+    private string _BuildMainCategoryPrompt(List<string> mainCategories)
     {
+        var candidates = $"[{string.Join(",", mainCategories)}]";
+        Logger.Log($"Main category options: {candidates}");
         var sb = new System.Text.StringBuilder();
 
-        sb.AppendLine("Для любого запроса пользователя выдели основную категорию из массива");
-        sb.AppendLine($"[{string.Join(",", mainCategories)}]");
-        sb.AppendLine("В ответ пришли строго одно число - индекс категории из массива от нуля");
-        sb.AppendLine("если подходящей категории нет, верни -1");
+        sb.AppendLine($@"
+        Determine the main category of the user's request from the list of categories:
+        {candidates}
+
+        Selection rules:
+        - 'Новые клиенты' — questions about how to become a client, register, or get the first product.
+        - 'Продукты - Вклады' — everything related to deposits, interest rates, withdrawals, or replenishments.
+        - 'Продукты - Карты' — issuing, receiving, using, blocking, paying, or activating bank cards.
+        - 'Продукты - Кредиты' — loans, credit cards, rates, issuance, repayment, debts.
+        - 'Техническая поддержка' — any technical questions: app, website, online banking, login, installation, errors, updates, downloads, etc.
+        - 'Частные клиенты' — general questions from private individuals not related to specific products.
+
+        Respond with exactly one number — the category index (starting from 0).
+        If there is no suitable category, return -1.
+        No explanations, only the number.
+        ");
 
         return sb.ToString();
     }
+
     
     
     private string _BuildAnswersPrompt(List<(string answer, int score)> ratedAnswers)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("Для запроса пользователя выбирай подходящие ответы и верни строго JSON-массив подходящих индексов.\n");
-        sb.Append("Ни слов, ни пояснений, ничего кроме JSON-массива. Пример: [0,2,3] или [] или [2]\n\n");
-        sb.Append("Варианты (не менять):\n");
-        
+        sb.Append(@"
+        For the user's query, choose the most relevant answers and return strictly a JSON array of matching indices.
+        Select answers that directly or partially help solve the user's problem.
+        No words, no explanations — only a JSON array. Example: [0,2,3] or [2]
+
+        Options (you must select those that at least partially provide an answer):
+        ");
+
         int index = 0;
         foreach (var answer in ratedAnswers)
         {
