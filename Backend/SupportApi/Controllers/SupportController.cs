@@ -83,17 +83,23 @@ public class SupportController : ControllerBase
     [HttpPost("template")]
     public async Task<IActionResult> SaveTemplate([FromBody] TemplateDto dto)
     {
-        var listCategory = _db.BankFaqs 
-            .Select(a => a.MainCategory)
+        var mainCategories = await _db.BankFaqs
+            .Select(b => b.MainCategory)
             .Distinct()
-            .ToList();
+            .ToListAsync();
+        
+        var targetAudiences = await _db.BankFaqs
+            .Select(b => b.TargetAudience)
+            .Distinct()
+            .ToListAsync();
+        
         var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        var mainCategory = await gen.GetMainCategoryAsync(listCategory, dto.Question);
+        var (mainCategory, targetAudience) = await gen.GetEntitiesAsync(mainCategories, targetAudiences, dto.Question);
         if (mainCategory == null)
         {
             return StatusCode(500);
         }
-        var save = new SaveNewItemToDb(_db.BankFaqs, dto.Answer, dto.Question, mainCategory, _sciBoxClient);
+        var save = new SaveNewItemToDb(_db.BankFaqs, dto.Answer, dto.Question, mainCategory, targetAudience, _sciBoxClient);
         await save.AnalysisAndSave();
         await _db.SaveChangesAsync();
         return await Task.FromResult(Ok(save));
