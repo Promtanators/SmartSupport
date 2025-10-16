@@ -49,9 +49,15 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
       >
         {recommendation.answer}
       </Typography.Text>
-      <Tag color={getTagColor(recommendation.score)}>
-        {recommendation.score}%
-      </Tag>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        {recommendation.mainCategory && (
+          <Tag color="blue">{recommendation.mainCategory}</Tag>
+        )}
+        <Tag color={getTagColor(recommendation.score)}>
+          {recommendation.score}%
+        </Tag>
+      </div>
     </Card>
   );
 };
