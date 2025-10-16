@@ -1,4 +1,4 @@
-﻿namespace SupportApi.Models.Entities;
+namespace SupportApi.Models.Entities;
 
 public static class MathOperations
 {
