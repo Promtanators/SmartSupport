@@ -50,27 +50,29 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
         style={{ flex: 1, paddingRight: "8px" }}
         type={isActive ? "" : "secondary"}
       >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "flex-end",
+            gap: "4px",
+            marginBottom: "8px"
+          }}
+        >
+          {recommendation.score && (
+            <Tag color={getTagColor(recommendation.score)}>
+              {recommendation.score}%
+            </Tag>
+          )}
+          {recommendation.mainCategory && (
+            <Tag color="blue">{recommendation.mainCategory}</Tag>
+          )}
+          {recommendation.targetAudience && (
+            <Tag color="purple">{recommendation.targetAudience}</Tag>
+          )}
+        </div>
         {recommendation.answer}
       </Typography.Text>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: "4px",
-        }}
-      >
-        {recommendation.mainCategory && (
-          <Tag color="blue">{recommendation.mainCategory}</Tag>
-        )}
-        <Tag color={getTagColor(recommendation.score)}>
-          {recommendation.score}%
-        </Tag>
-        {recommendation && (
-          <Tag color="purple">{recommendation.targetAudience}</Tag>
-        )}
-      </div>
     </Card>
   );
 };
