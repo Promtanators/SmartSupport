@@ -2,7 +2,7 @@ import axios from "axios";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-  timeout: 7000,
+  timeout: 40000,
 });
 
 export const fetchData = async (message) => {
