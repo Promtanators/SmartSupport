@@ -17,6 +17,7 @@ public class RecommendationsGenerator
     private const string SubCategoryLabel = "SubCategory";
     private const string TargetAudienceLabel = "TargetAudience";
     private const int MaxTemplates = 10;
+    private const int TrustScore = 85;
 
     public RecommendationsGenerator(DbSet<BankFaq> bankFaqs, SciBoxClient sciBoxClient)
     {
@@ -30,18 +31,7 @@ public class RecommendationsGenerator
         double[] embeddingResult = JsonSerializer.Deserialize<double[]>(userEmbedding) 
                                    ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");
         
-        
-        List<(string TemplateResponse, double matchIndex)> embeddingValues = new();
-        
-        foreach (var bankFaq in _bankFaqs)
-        {
-            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding) 
-                            ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");;
-            
-            double match = MathOperations.CosineSimilarity(embeddingResult, embedding);
-            
-            embeddingValues.Add((bankFaq.TemplateResponse, match));
-        }
+        var embeddingValues = _RateByEmbedding(_bankFaqs, embeddingResult);
         
         var matchList = embeddingValues
             .OrderByDescending(x => x.Item2)
@@ -49,7 +39,7 @@ public class RecommendationsGenerator
             .ToList();
         
         return matchList
-            .Select(x => new AnswerScoreDto(x.TemplateResponse, (int)(x.matchIndex * 100)))
+            .Select(x => new AnswerScoreDto(x.answer, x.score))
             .ToList();
     }
     
@@ -59,28 +49,37 @@ public class RecommendationsGenerator
             .Select(b => b.MainCategory)
             .Distinct()
             .ToListAsync();
-
-        var mainCategoryTask = GetMainCategoryAsync(mainCategories, message);
-        var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
-
-        await Task.WhenAll(mainCategoryTask, messageEmbTask);
         
-        var mainCategory = mainCategoryTask.Result;
-        var messageEmb = JsonSerializer.Deserialize<double[]>(messageEmbTask.Result);
-
+        var messageEmbJson = await _sciBoxClient.GetEmbeddingAsync(message);
+        var messageEmb = JsonSerializer.Deserialize<double[]>(messageEmbJson);
         if (messageEmb is null) throw new DataException("Cant get embeddings for message");
+        
+        var ratedAnswers = _RateByEmbedding(_bankFaqs, messageEmb);
+        var trustedAnswers = ratedAnswers
+            .Where(a => a.score >= TrustScore)
+            .Select(a => new AnswerScoreDto(a.answer, a.score))
+            .ToList();
+        
+        if(trustedAnswers.Count > 0) return trustedAnswers;
+        
+        var mainCategory = await GetMainCategoryAsync(mainCategories, message);
         if (mainCategory is null) throw new DataException($"Cant get {MainCategoryLabel} for message");
         
-        var bankFaqs = await _bankFaqs
+        var filtered = await _bankFaqs
             .Where(b => b.MainCategory == mainCategory)
             .ToListAsync();
-
-        var ratedAnswers = _RateByEmbedding(bankFaqs, messageEmb);
+        ratedAnswers = _RateByEmbedding(filtered, messageEmb);
+        
+        
+        // var verifiedAnswers = await _GetAnswersAsync(ratedAnswers, message);
+        // return verifiedAnswers
+        //     .UnionBy(trustedAnswers, a => a.Answer)
+        //     .ToList();
         return await _GetAnswersAsync(ratedAnswers, message);
     }
     
     private List<(string answer, int score)> _RateByEmbedding(
-        List<BankFaq> bankFaqs,
+        IEnumerable<BankFaq> bankFaqs,
         double[] messageEmb)
     {
         List<(string answer, int score)> ratedAnswers = new();
@@ -186,10 +185,14 @@ public class RecommendationsGenerator
         sb.Append(@"
         For the user's query, choose the most relevant answers and return strictly a JSON array of matching indices.
         Select answers that directly or partially help solve the user's problem.
+        There is no limit to the number of answers you can select — choose all that are relevant.
+        The listed options have already been pre-filtered by semantic similarity (embeddings), so focus only on relevance to the user's intent.
+        Do not include any indices outside the valid range — if there are N options, the maximum possible index is N-1.
         No words, no explanations — only a JSON array. Example: [0,2,3] or [2]
 
         Options (you must select those that at least partially provide an answer):
         ");
+        
 
         int index = 0;
         foreach (var answer in ratedAnswers)
