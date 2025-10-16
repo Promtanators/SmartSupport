@@ -5,16 +5,23 @@ import particlesConfig from "./particles-config";
 import { loadSlim } from "tsparticles-slim";
 import { fetchData } from "../api";
 
-export default function UserPage({ onNextPage, message, setMessage, setData }) {
+export default function UserPage({
+  onNextPage,
+  message,
+  setMessage,
+  setData,
+  setError,
+}) {
   const handleSubmit = async () => {
     if (!message.trim()) return;
-
+    onNextPage();
     try {
       const result = await fetchData(message);
       setData(result);
-      onNextPage();
+      setError(null);
     } catch (error) {
-      console.error("Ошибка при отправке сообщения:", error);
+      setError("Ошибка при получении подсказок");
+      console.error(error);
     }
   };
 

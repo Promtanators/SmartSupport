@@ -6,6 +6,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(0);
   const [message, setMessage] = useState("");
   const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
 
   return (
     <>
@@ -15,9 +16,18 @@ function App() {
           message={message}
           setMessage={setMessage}
           setData={setData}
+          setError={setError}
         />
       )}
-      {currentPage === 1 && <SupportPage message={message} />}
+      {currentPage === 1 && (
+        <SupportPage
+          message={message}
+          data={data}
+          error={error}
+          setData={setData}
+          setError={setError}
+        />
+      )}
     </>
   );
 }
