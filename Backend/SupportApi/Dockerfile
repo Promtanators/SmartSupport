@@ -7,10 +7,9 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["SupportApi/SupportApi.csproj", "SupportApi/"]
-RUN dotnet restore "SupportApi/SupportApi.csproj"
+COPY ["SupportApi.csproj", "."]
+RUN dotnet restore "SupportApi.csproj"
 COPY . .
-WORKDIR "/src/SupportApi"
 RUN dotnet build "./SupportApi.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
@@ -20,4 +19,7 @@ RUN dotnet publish "./SupportApi.csproj" -c $BUILD_CONFIGURATION -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+COPY support.db /app/
+
 ENTRYPOINT ["dotnet", "SupportApi.dll"]
