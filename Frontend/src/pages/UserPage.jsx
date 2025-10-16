@@ -102,12 +102,8 @@ const styles = {
     textAlign: "center",
     backgroundColor: "rgba(255,255,255,0.95)",
   },
-
   avatar: { backgroundColor: "#1677ff", marginBottom: 16 },
-  text: {
-    marginBottom: 24,
-    fontSize: 16,
-  },
+  text: { marginBottom: 24, fontSize: 16 },
   inputContainer: {
     display: "flex",
     gap: 8,
@@ -120,8 +116,11 @@ const styles = {
   sendButton: {
     width: "auto",
     height: "auto",
-    padding: "0 20px",
+    aspectRatio: "1 / 1",
+    minWidth: "48px",
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
   },
 };
