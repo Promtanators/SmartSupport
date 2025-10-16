@@ -31,11 +31,20 @@ public class SupportController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskDto dto)
     {
-        var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
-        var recommendations = await gen.GetRecommendations(dto.Message);
-        
-        var response = new ResponseDto(recommendations);
-        
+        ResponseDto? response = null;
+        try
+        {
+            var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
+            var recommendations = await gen.GetRecommendations(dto.Message);
+
+            response = new ResponseDto(recommendations);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "При обработке post ask");
+            response = new ResponseDto(new());
+        }
+
         return await Task.FromResult(Ok(response));
     }
     
