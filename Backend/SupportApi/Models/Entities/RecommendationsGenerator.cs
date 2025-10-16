@@ -31,15 +31,24 @@ public class RecommendationsGenerator
         double[] embeddingResult = JsonSerializer.Deserialize<double[]>(userEmbedding) 
                                    ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");
         
-        var embeddingValues = _RateByEmbedding(_bankFaqs, embeddingResult);
+        List<(string TemplateResponse, string MainCategory, string SubCategory, string TargetAudience, double matchIndex)> embeddingValues = new();
+        
+        foreach (var bankFaq in _bankFaqs)
+        {
+            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding) 
+                            ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");;
+            double match = MathOperations.CosineSimilarity(embeddingResult, embedding);
+            
+            embeddingValues.Add((bankFaq.TemplateResponse, bankFaq.MainCategory, bankFaq.Subcategory, bankFaq.TargetAudience ,match));
+        }
         
         var matchList = embeddingValues
-            .OrderByDescending(x => x.Item2)
+            .OrderByDescending(x => x.matchIndex)
             .Take(MaxTemplates)
             .ToList();
         
         return matchList
-            .Select(x => new AnswerScoreDto(x.answer, x.score, "", "", ""))
+            .Select(x => new AnswerScoreDto(x.TemplateResponse, (int)(x.matchIndex * 100) , x.MainCategory, x.SubCategory, x.TargetAudience))
             .ToList();
     }
     
@@ -72,7 +81,6 @@ public class RecommendationsGenerator
             .ToList();
         
         if(trustedAnswers.Count > 0) return trustedAnswers;
-        
         
         if (mainCategory is null) throw new DataException($"Cant get {MainCategoryLabel} for message");
         
