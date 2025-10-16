@@ -9,14 +9,22 @@ public class SaveNewItemToDb
     private string _operatorResponse;
     private string _userResponse;
     private string _mainCategory;
+    private string _targetAudience;
 
-    public SaveNewItemToDb(DbSet<BankFaq> bankFaqs, string operatorResponse, string userResponse, string mainCategory, SciBoxClient sciBoxClient)
+    public SaveNewItemToDb(
+        DbSet<BankFaq> bankFaqs,
+        string operatorResponse,
+        string userResponse,
+        string mainCategory,
+        string targetAudience,
+        SciBoxClient sciBoxClient)
     {
         _bankFaqs = bankFaqs;
         _operatorResponse = operatorResponse;
         _userResponse = userResponse;
         _mainCategory = mainCategory;
         _sciBoxClient = sciBoxClient;
+        _targetAudience = targetAudience;
     }
 
     public async Task AnalysisAndSave()
@@ -37,7 +45,7 @@ public class SaveNewItemToDb
             null, 
             userResponse,
             null,
-            null,
+            _targetAudience,
             operatorResponse,
             embedding
         );

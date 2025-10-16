@@ -8,7 +8,7 @@ public class BankFaq
     public string? Subcategory  { get; set; }
     public string ExampleQuestion  { get; set; }
     public string? Priority  { get; set; }
-    public string? TargetAudience  { get; set; }
+    public string TargetAudience  { get; set; }
     public string TemplateResponse   { get; set; }
     
     public string ExampleEmbedding { get; set; }

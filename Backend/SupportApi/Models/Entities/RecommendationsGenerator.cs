@@ -50,12 +50,17 @@ public class RecommendationsGenerator
             .Distinct()
             .ToListAsync();
         
+        var targetAudiences = await _bankFaqs
+            .Select(b => b.TargetAudience)
+            .Distinct()
+            .ToListAsync();
+        
         var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
-        var mainCategoryTask = GetMainCategoryAsync(mainCategories, message);
-        await Task.WhenAll(messageEmbTask, mainCategoryTask);
+        var entitiesTask = GetEntitiesAsync(mainCategories, targetAudiences, message);
+        await Task.WhenAll(messageEmbTask, entitiesTask);
 
         var messageEmbJson = await messageEmbTask;
-        var mainCategory = await mainCategoryTask;
+        var (mainCategory, targetAudience) = await entitiesTask;
         
         var messageEmb = JsonSerializer.Deserialize<double[]>(messageEmbJson);
         if (messageEmb is null) throw new DataException("Cant get embeddings for message");
@@ -63,7 +68,7 @@ public class RecommendationsGenerator
         var ratedAnswers = _RateByEmbedding(_bankFaqs, messageEmb);
         var trustedAnswers = ratedAnswers
             .Where(a => a.score >= TrustScore)
-            .Select(a => new AnswerScoreDto(a.answer, a.score, mainCategory ?? "", "", ""))
+            .Select(a => new AnswerScoreDto(a.answer, a.score, mainCategory ?? "", "", targetAudience ?? ""))
             .ToList();
         
         if(trustedAnswers.Count > 0) return trustedAnswers;
@@ -81,7 +86,7 @@ public class RecommendationsGenerator
         // return verifiedAnswers
         //     .UnionBy(trustedAnswers, a => a.Answer)
         //     .ToList();
-        return await _GetAnswersAsync(ratedAnswers, message, mainCategory);
+        return await _GetAnswersAsync(ratedAnswers, message, mainCategory, targetAudience ?? "");
     }
     
     private List<(string answer, int score)> _RateByEmbedding(
@@ -107,23 +112,25 @@ public class RecommendationsGenerator
     } 
     
 
-    public async Task<string?> GetMainCategoryAsync(
+    public async Task<(string? MainCategory, string? TargetAudience)> GetEntitiesAsync(
         List<string> mainCategories,
+        List<string> targetAudiences,
         string message)
     {
-        var systemPrompt = _BuildMainCategoryPrompt(mainCategories);
+        var systemPrompt = _BuildEntitiesPrompt(mainCategories, targetAudiences);
 
         var startWaiting = DateTime.UtcNow;
         var answer = await _sciBoxClient.Ask(systemPrompt, message);
         Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
-            var index = int.Parse(answer);
-            if (index < 0) return null;
-            var mainCategory = mainCategories[index];
+            var indexes = JsonSerializer.Deserialize<List<int>>(answer);
+            if(indexes == null || indexes.Count != 2) throw new DataException("Cant deserialize entities answer");
+            var mainCategory = indexes[0] >= 0 ? mainCategories[indexes[0]] : null;
+            var targetAudience = indexes[1] >= 0 ? targetAudiences[indexes[1]] : null;
             
-            Logger.Log($"Главная категория: {mainCategory}");
-            return mainCategory;
+            Logger.Log($"Главная категория: {mainCategory}, Целевая аудитория: {targetAudience}");
+            return (mainCategory, targetAudience);
         }
         catch (Exception ex)
         {
@@ -134,7 +141,8 @@ public class RecommendationsGenerator
     private async Task<List<AnswerScoreDto>> _GetAnswersAsync(
         List<(string answer, int score)> ratedAnswers,
         string message,
-        string mainCategory)
+        string mainCategory,
+        string targetAudience)
     {
         var systemPrompt = _BuildAnswersPrompt(ratedAnswers);
         
@@ -153,39 +161,58 @@ public class RecommendationsGenerator
         var chosenAnswers = new List<AnswerScoreDto>();
         foreach (var index in indexes)
         {
-            chosenAnswers.Add(new AnswerScoreDto(ratedAnswers[index].answer, ratedAnswers[index].score, mainCategory, "", ""));
+            chosenAnswers.Add(new AnswerScoreDto(ratedAnswers[index].answer, ratedAnswers[index].score, mainCategory, "", targetAudience));
         }
         return chosenAnswers;
     }
 
-    private string _BuildMainCategoryPrompt(List<string> mainCategories)
+    private string _BuildEntitiesPrompt(List<string> mainCategories, List<string> targetAudiences)
     {
         if (mainCategories.Count == 0) throw new DataException("mainCategories is empty");
-        var candidates = $"[{string.Join(",", mainCategories)}]";
-        Logger.Log($"Main category options: {candidates}");
+        if (targetAudiences.Count == 0) throw new DataException("targetAudiences is empty");
+
+        var mainCandidates = $"[{string.Join(", ", mainCategories)}]";
+        var targetCandidates = $"[{string.Join(", ", targetAudiences)}]";
+        Logger.Log($"Main category options: {mainCandidates}");
+        Logger.Log($"Target audience options: {targetCandidates}");
+
         var sb = new System.Text.StringBuilder();
 
         sb.AppendLine($@"
-        Determine the main category of the user's request from the list of categories:
-        {candidates}
-
-        Selection rules:
-        - 'Новые клиенты' — questions about how to become a client, register, or get the first product.
-        - 'Продукты - Вклады' — everything related to deposits, interest rates, withdrawals, or replenishments.
-        - 'Продукты - Карты' — issuing, receiving, using, blocking, paying, or activating bank cards.
-        - 'Продукты - Кредиты' — loans, credit cards, rates, issuance, repayment, debts.
-        - 'Техническая поддержка' — any technical questions: app, website, online banking, login, installation, errors, updates, downloads, etc.
-        - 'Частные клиенты' — general questions from private individuals not related to specific products.
-
-        Respond with exactly one number — the category index.
-        Valid indices are from 0 to {mainCategories.Count - 1}.
-        If there is no suitable category, return -1.
-        No explanations, only the number.
+        Determine the MainCategory and TargetAudience of the user's request from the lists below.
+        Return strictly a JSON-array of two integers in the format [{MainCategoryLabel}Index, {TargetAudienceLabel}Index].
+        Indices start at 0. If there is no suitable value for an element — return -1 for that element.
+        Choose TargetAudience only from the provided list. Nothing but the JSON-array should be returned.
+        Example: [0,1]
         ");
 
+        sb.AppendLine($"{MainCategoryLabel}:");
+        for (int i = 0; i < mainCategories.Count; i++)
+        {
+            sb.AppendLine($"  {i}: {mainCategories[i]}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"{TargetAudienceLabel}:");
+        for (int i = 0; i < targetAudiences.Count; i++)
+        {
+            sb.AppendLine($"  {i}: {targetAudiences[i]}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Selection rules:");
+        sb.AppendLine("- 'Новые клиенты' — questions about how to become a client, register, or get the first product.");
+        sb.AppendLine("- 'Продукты - Вклады' — everything related to deposits, interest rates, withdrawals, or replenishments.");
+        sb.AppendLine("- 'Продукты - Карты' — issuing, receiving, using, blocking, paying, or activating bank cards.");
+        sb.AppendLine("- 'Продукты - Кредиты' — loans, credit cards, rates, issuance, repayment, debts.");
+        sb.AppendLine("- 'Техническая поддержка' — any technical questions: app, website, online banking, login, installation, errors, updates, downloads, etc.");
+        sb.AppendLine("- 'Частные клиенты' — general questions from private individuals not related to specific products.");
+        sb.AppendLine();
+        sb.AppendLine("Return only the JSON array, for example: [2,0]");
 
         return sb.ToString();
     }
+
 
     
     
