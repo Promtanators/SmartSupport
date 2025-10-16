@@ -92,10 +92,10 @@ const styles = {
   },
   card: {
     width: "100%",
-    maxWidth: 600,
+    maxWidth: 750, 
     borderRadius: 16,
     boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-    padding: 20,
+    padding: 30,  
     textAlign: "center",
   },
   avatar: { backgroundColor: "#1677ff", marginBottom: 16 },

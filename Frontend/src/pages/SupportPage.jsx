@@ -10,13 +10,14 @@ import {
   Modal,
   Tag,
   Spin,
-  Alert,
+  Skeleton,
 } from "antd";
 import {
   SendOutlined,
   UserOutlined,
   CustomerServiceOutlined,
   CommentOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { fetchData } from "../api";
 
@@ -36,10 +37,12 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
         cursor: isActive ? "pointer" : "not-allowed",
         opacity: isActive ? 1 : 0.6,
       }}
-      bodyStyle={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
+      styles={{
+        body: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
       }}
       onClick={isActive ? () => onClick(recommendation.answer) : undefined}
     >
@@ -55,7 +58,7 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-end",
-          gap: "8px",
+          gap: "4px",
         }}
       >
         {recommendation.mainCategory && (
@@ -64,6 +67,9 @@ const RecommendationCard = ({ recommendation, onClick, isActive }) => {
         <Tag color={getTagColor(recommendation.score)}>
           {recommendation.score}%
         </Tag>
+        {recommendation && (
+          <Tag color="purple">{recommendation.targetAudience}</Tag>
+        )}
       </div>
     </Card>
   );
@@ -226,22 +232,37 @@ export default function SupportOperatorPage({
             styles={{ body: { overflowY: "auto", padding: "16px" } }}
           >
             {loadingRec && (
-              <div style={{ textAlign: "center", padding: 32, height: "100%" }}>
-                <Spin size="large" />
-                <Typography.Text style={{ display: "block", marginTop: 16 }}>
-                  Ищем ответ...
-                </Typography.Text>
+              <div>
+                {[...Array(4)].map((_, index) => (
+                  <Skeleton.Input
+                    key={index}
+                    active
+                    block
+                    style={{ marginBottom: 12, height: 42 }}
+                  />
+                ))}
               </div>
             )}
 
             {!loadingRec && error && (
-              <Alert
-                message="Ошибка загрузки"
-                description={error}
-                type="error"
-                showIcon
-                style={{ margin: "16px 0" }}
-              />
+              <div
+                style={{
+                  background: "#f5f5f5",
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  margin: "16px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <ExclamationCircleOutlined
+                  style={{ color: "rgba(0, 0, 0, 0.45)" }}
+                />
+                <Typography.Text type="secondary">
+                  Что-то пошло не так.
+                </Typography.Text>
+              </div>
             )}
 
             {!loadingRec &&
