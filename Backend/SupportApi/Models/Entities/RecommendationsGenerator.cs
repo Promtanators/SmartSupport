@@ -39,7 +39,7 @@ public class RecommendationsGenerator
             .ToList();
         
         return matchList
-            .Select(x => new AnswerScoreDto(x.answer, x.score))
+            .Select(x => new AnswerScoreDto(x.answer, x.score, "", "", ""))
             .ToList();
     }
     
@@ -50,19 +50,25 @@ public class RecommendationsGenerator
             .Distinct()
             .ToListAsync();
         
-        var messageEmbJson = await _sciBoxClient.GetEmbeddingAsync(message);
+        var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
+        var mainCategoryTask = GetMainCategoryAsync(mainCategories, message);
+        await Task.WhenAll(messageEmbTask, mainCategoryTask);
+
+        var messageEmbJson = await messageEmbTask;
+        var mainCategory = await mainCategoryTask;
+        
         var messageEmb = JsonSerializer.Deserialize<double[]>(messageEmbJson);
         if (messageEmb is null) throw new DataException("Cant get embeddings for message");
         
         var ratedAnswers = _RateByEmbedding(_bankFaqs, messageEmb);
         var trustedAnswers = ratedAnswers
             .Where(a => a.score >= TrustScore)
-            .Select(a => new AnswerScoreDto(a.answer, a.score))
+            .Select(a => new AnswerScoreDto(a.answer, a.score, mainCategory ?? "", "", ""))
             .ToList();
         
         if(trustedAnswers.Count > 0) return trustedAnswers;
         
-        var mainCategory = await GetMainCategoryAsync(mainCategories, message);
+        
         if (mainCategory is null) throw new DataException($"Cant get {MainCategoryLabel} for message");
         
         var filtered = await _bankFaqs
@@ -75,7 +81,7 @@ public class RecommendationsGenerator
         // return verifiedAnswers
         //     .UnionBy(trustedAnswers, a => a.Answer)
         //     .ToList();
-        return await _GetAnswersAsync(ratedAnswers, message);
+        return await _GetAnswersAsync(ratedAnswers, message, mainCategory);
     }
     
     private List<(string answer, int score)> _RateByEmbedding(
@@ -127,7 +133,8 @@ public class RecommendationsGenerator
 
     private async Task<List<AnswerScoreDto>> _GetAnswersAsync(
         List<(string answer, int score)> ratedAnswers,
-        string message)
+        string message,
+        string mainCategory)
     {
         var systemPrompt = _BuildAnswersPrompt(ratedAnswers);
         
@@ -146,7 +153,7 @@ public class RecommendationsGenerator
         var chosenAnswers = new List<AnswerScoreDto>();
         foreach (var index in indexes)
         {
-            chosenAnswers.Add(new AnswerScoreDto(ratedAnswers[index].answer, ratedAnswers[index].score));
+            chosenAnswers.Add(new AnswerScoreDto(ratedAnswers[index].answer, ratedAnswers[index].score, mainCategory, "", ""));
         }
         return chosenAnswers;
     }
