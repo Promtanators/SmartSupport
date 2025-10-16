@@ -153,6 +153,7 @@ public class RecommendationsGenerator
 
     private string _BuildMainCategoryPrompt(List<string> mainCategories)
     {
+        if (mainCategories.Count == 0) throw new DataException("mainCategories is empty");
         var candidates = $"[{string.Join(",", mainCategories)}]";
         Logger.Log($"Main category options: {candidates}");
         var sb = new System.Text.StringBuilder();
@@ -169,10 +170,12 @@ public class RecommendationsGenerator
         - 'Техническая поддержка' — any technical questions: app, website, online banking, login, installation, errors, updates, downloads, etc.
         - 'Частные клиенты' — general questions from private individuals not related to specific products.
 
-        Respond with exactly one number — the category index (starting from 0).
+        Respond with exactly one number — the category index.
+        Valid indices are from 0 to {mainCategories.Count - 1}.
         If there is no suitable category, return -1.
         No explanations, only the number.
         ");
+
 
         return sb.ToString();
     }
