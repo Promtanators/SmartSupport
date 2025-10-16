@@ -58,32 +58,6 @@ public class SupportController : ControllerBase
         
         return await Task.FromResult(Ok(response));
     }
-    
-    [HttpGet("update")]
-    public async Task<IActionResult> Update()
-    {
-        try
-        {
-            foreach (var dbBankFaq in _db.BankFaqs)
-            {
-                var question = dbBankFaq.ExampleQuestion;
-
-                var embedding = await _sciBoxClient.GetEmbeddingAsync(question);
-
-                dbBankFaq.ExampleEmbedding = embedding;
-            }
-        }
-        catch (Exception ex)
-        {
-            return await Task.FromResult(Ok("Error while updating embedding column: " + ex.Message)); 
-        }
-        finally
-        {
-            await _db.SaveChangesAsync();
-        }
-
-        return await Task.FromResult(Ok("Database updated successfully"));
-    }
 
     [HttpGet("all")]
     public async Task<IActionResult> GetAll()
@@ -107,7 +81,7 @@ public class SupportController : ControllerBase
         }
     }
     [HttpPost("template")]
-    public async Task<IActionResult> SaveToDb([FromBody] TemplateDto dto)
+    public async Task<IActionResult> SaveTemplate([FromBody] TemplateDto dto)
     {
         var listCategory = _db.BankFaqs 
             .Select(a => a.MainCategory)
