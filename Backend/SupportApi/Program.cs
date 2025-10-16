@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using SupportApi;
 using SupportApi.Data;
+using SupportApi.Models.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,9 +8,21 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+var loggerFactory = LoggerFactory.Create(b =>
+    {
+        b.AddConsole();
+        b.AddDebug();
+    }
+);
+
+Logger.Initialization(loggerFactory.CreateLogger("Global"));
+var connection = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<SupportDbContext>(options =>
+    options.UseSqlite(connection));
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddDefaultPolicy(policy =>
     {
         policy.AllowAnyOrigin()
             .AllowAnyMethod()
@@ -18,19 +30,20 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connection = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<SupportDbContext>(options =>
-    options.UseSqlite(connection));
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
-app.UseCors("AllowAll");
+app.UseSwagger();
+app.UseSwaggerUI();
+
+// if (app.Environment.IsDevelopment())
+// {
+//     app.UseSwagger();
+//     app.UseSwaggerUI();
+// }
+
+app.UseCors();
 
 app.MapControllers();
 

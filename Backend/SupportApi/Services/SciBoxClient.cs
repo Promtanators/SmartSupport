@@ -11,8 +11,8 @@ public class SciBoxClient
     private const string OpenRouterModelName = "qwen/qwen3-vl-8b-thinking";
     private const string ModelNameBge = "bge-m3";
     
-    private const double Temperature = 0.1;
-    private const double TopProbability = 0.9;
+    private const double Temperature = 0.0;
+    private const double TopProbability = 1.0;
     private const int MaxTokens = 1000;
 
     private readonly HttpClient _httpClient = new(new HttpClientHandler
@@ -35,7 +35,32 @@ public class SciBoxClient
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         });
     }
+    
+    
+    public async Task<string> GetEmbeddingAsync(string userInput)
+    {
+        var payload = new
+        {
+            model =  ModelNameBge,
+            input =  userInput
+        };
 
+        var json = JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync($"{ApiBaseUrl}/v1/embeddings ", content);
+        response.EnsureSuccessStatusCode();
+        
+        var responseString = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(responseString);
+
+        var embedding = doc.RootElement
+            .GetProperty("data")[0]
+            .GetProperty("embedding")
+            .ToString();
+        
+        return embedding;
+    }
     public async Task<string> GetModels()
     {
         var response = await _httpClient.GetAsync($"{ApiBaseUrl}/models");
