@@ -253,10 +253,10 @@ docker compose up -d --build
 ## <h2 id="team-and-contacts">Команда и Контакты 📫</h2>
 
 - **Frontend:**
-    - Георгий — [email/telegram]
-    - Егор (главный в команде) — [email/telegram]
+    - Георгий — [belushgorg@gmail.com](mailto:belushgorg@gmail.com), [GitHub](https://github.com/Girjey)
+    - Егор (главный в команде) — [ef188209@gmail.com](mailto:ef188209@gmail.com), [GitHub](https://github.com/EgorFedosov)
 
 - **Backend:**
-    - Максим — [mailto:bib.maxim@gmail.com]
-    - Алексей — [email/telegram]
-    - Эдуард — [email/telegram]
+    - Максим — [bib.maxim@gmail.com](mailto:bib.maxim@gmail.com), [GitHub](https://github.com/Max2772)
+    - Алексей — [bib.maxim@gmail.com](mailto:boykopovar@gmail.com), [GitHub](https://github.com/boykopovar)
+    - Эдуард — [kilbas.svetlana1982@gmail.com](mailto:kilbas.svetlana1982@gmail.com), [GitHub](https://github.com/UterSt)
