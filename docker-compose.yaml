@@ -11,6 +11,7 @@ services:
       - .env
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - SCIBOX_API_KEY=${SCIBOX_API_KEY}
     volumes:
       - ./Backend/SupportApi/support.db:/app/support.db
 
