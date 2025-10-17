@@ -267,7 +267,7 @@ docker compose up -d --build
 - `README.md` — это руководство.
 
 **Схема архитектуры:**  
-![Архитектура](docs/assets/Archirecture.png)
+![Архитектура](docs/assets/SmartSupport_archirecture.png)
 
 Фронтенд и бэкенд связаны через REST API (эндпоинты описаны выше). БД хранит шаблоны и историю.
 
