@@ -5,13 +5,14 @@ using Microsoft.EntityFrameworkCore.Query;
 using SupportApi.Data;
 using SupportApi.Models.Dto;
 using SupportApi.Models.Entities;
+using SupportApi.Services;
 
 namespace SupportApi.Models.Entities;
 
 public class RecommendationsGenerator
 {
     private DbSet<BankFaq> _bankFaqs;
-    private SciBoxClient _sciBoxClient;
+    private AiClient _aiClient;
 
     private const string MainCategoryLabel = "MainCategory";
     private const string SubCategoryLabel = "SubCategory";
@@ -19,15 +20,15 @@ public class RecommendationsGenerator
     private const int MaxTemplates = 10;
     private const int TrustScore = 85;
 
-    public RecommendationsGenerator(DbSet<BankFaq> bankFaqs, SciBoxClient sciBoxClient)
+    public RecommendationsGenerator(DbSet<BankFaq> bankFaqs, AiClient aiClient)
     {
         _bankFaqs = bankFaqs;
-        _sciBoxClient = sciBoxClient;
+        _aiClient = aiClient;
     }
 
     public async Task<List<AnswerScoreDto>> GetRecommendationsFast(string message)
     {
-        string userEmbedding = await _sciBoxClient.GetEmbeddingAsync(message);
+        string userEmbedding = await _aiClient.GetEmbeddingAsync(message);
         double[] embeddingResult = JsonSerializer.Deserialize<double[]>(userEmbedding) 
                                    ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");
         
@@ -35,7 +36,11 @@ public class RecommendationsGenerator
         
         foreach (var bankFaq in _bankFaqs)
         {
-            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding) 
+            string? jsonEmbedding = _aiClient.IsMistral? bankFaq.ExampleMistralEmbedding : bankFaq.ExampleSciBoxEmbedding;
+            if (jsonEmbedding is null)
+                throw new DataException($"There is no embedding for {_aiClient.EmbedModelName}");
+            
+            var embedding = JsonSerializer.Deserialize<double[]>(jsonEmbedding) 
                             ?? throw new NullReferenceException($"{nameof(embeddingResult)} is null");;
             double match = MathOperations.CosineSimilarity(embeddingResult, embedding);
             
@@ -64,7 +69,7 @@ public class RecommendationsGenerator
             .Distinct()
             .ToListAsync();
         
-        var messageEmbTask = _sciBoxClient.GetEmbeddingAsync(message);
+        var messageEmbTask = _aiClient.GetEmbeddingAsync(message);
         var entitiesTask = GetEntitiesAsync(mainCategories, targetAudiences, message);
         await Task.WhenAll(messageEmbTask, entitiesTask);
 
@@ -105,7 +110,11 @@ public class RecommendationsGenerator
         
         foreach (var bankFaq in bankFaqs)
         {
-            var embedding = JsonSerializer.Deserialize<double[]>(bankFaq.ExampleEmbedding);
+            string? jsonEmbedding = _aiClient.IsMistral? bankFaq.ExampleMistralEmbedding : bankFaq.ExampleSciBoxEmbedding;
+            if (jsonEmbedding is null)
+                throw new DataException($"There is no embedding for model `{_aiClient.EmbedModelName}`, ExampleQuestion `{bankFaq.ExampleQuestion}`");
+            
+            var embedding = JsonSerializer.Deserialize<double[]>(jsonEmbedding);
             if (embedding is null)
                 throw new JsonException($"Cant deserialize embedding for example `{bankFaq.ExampleQuestion}");
             var score = MathOperations.CosineSimilarity(embedding, messageEmb);
@@ -128,7 +137,7 @@ public class RecommendationsGenerator
         var systemPrompt = _BuildEntitiesPrompt(mainCategories, targetAudiences);
 
         var startWaiting = DateTime.UtcNow;
-        var answer = await _sciBoxClient.Ask(systemPrompt, message);
+        var answer = await _aiClient.Ask(systemPrompt, message);
         Logger.LogInformation($"Шаг 1: Сущности извлечены за {(DateTime.UtcNow - startWaiting).Seconds}c");
         try
         {
@@ -160,7 +169,7 @@ public class RecommendationsGenerator
         
         Logger.LogJson("Кандидаты", candidates);
         
-        var response = await _sciBoxClient.Ask(systemPrompt, message);
+        var response = await _aiClient.Ask(systemPrompt, message);
         
         var indexes = JsonSerializer.Deserialize<List<int>>(response);
         if(indexes is null || indexes.Count == 0) throw new DataException("Cant get answers for message");

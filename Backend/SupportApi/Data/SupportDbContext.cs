@@ -38,6 +38,9 @@ public class SupportDbContext : DbContext
 
             entity.Property(f => f.TemplateResponse)
                 .HasColumnName("Шаблонный ответ");
+            
+            entity.Property(f => f.ExampleSciBoxEmbedding)
+                .HasColumnName("ExampleEmbedding");
         });
     }
 }

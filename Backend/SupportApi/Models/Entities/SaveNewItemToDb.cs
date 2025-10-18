@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using SupportApi.Services;
 
 namespace SupportApi.Models.Entities;
 
 public class SaveNewItemToDb
 {
     private DbSet<BankFaq> _bankFaqs;
-    private SciBoxClient _sciBoxClient;
+    private AiClient _aiClient;
     private string _operatorResponse;
     private string _userResponse;
     private string _mainCategory;
@@ -17,13 +18,13 @@ public class SaveNewItemToDb
         string userResponse,
         string mainCategory,
         string targetAudience,
-        SciBoxClient sciBoxClient)
+        AiClient aiClient)
     {
         _bankFaqs = bankFaqs;
         _operatorResponse = operatorResponse;
         _userResponse = userResponse;
         _mainCategory = mainCategory;
-        _sciBoxClient = sciBoxClient;
+        _aiClient = aiClient;
         _targetAudience = targetAudience;
     }
 
@@ -38,7 +39,7 @@ public class SaveNewItemToDb
 
     private async Task _SaveToDb(string operatorResponse,  string userResponse)
     {
-        var embedding = await _sciBoxClient.GetEmbeddingAsync(userResponse);
+        var embedding = await _aiClient.GetEmbeddingAsync(userResponse);
         var newFaq = new BankFaq
         (
             _mainCategory,
@@ -47,7 +48,8 @@ public class SaveNewItemToDb
             null,
             _targetAudience,
             operatorResponse,
-            embedding
+            exampleSciBoxEmbedding: _aiClient.IsMistral ? null : embedding,
+            exampleMistralEmbedding:_aiClient.IsMistral ? embedding : null
         );
         await _bankFaqs.AddAsync(newFaq);
     }

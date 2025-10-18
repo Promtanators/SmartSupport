@@ -1,10 +1,10 @@
-using System.Text.Json;
+using System.Collections;
 using SupportApi.Data;
 using SupportApi.Models.Dto;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.CodeAnalysis.Recommendations;
 using Microsoft.EntityFrameworkCore;
 using SupportApi.Models.Entities;
+using SupportApi.Services;
 
 namespace SupportApi.Controllers;
 
@@ -13,7 +13,7 @@ namespace SupportApi.Controllers;
 public class SupportController : ControllerBase
 {
     private readonly SupportDbContext _db;
-    private readonly SciBoxClient _sciBoxClient;
+    private readonly AiClient _aiClient;
     
     private const string ModelNameQwen = "Qwen2.5-72B-Instruct-AWQ";
     private const string ModelNameBge = "bge-m3";
@@ -21,11 +21,10 @@ public class SupportController : ControllerBase
     public SupportController(SupportDbContext db)
     {
         _db = db;
-        
         var token = Environment.GetEnvironmentVariable("SCIBOX_API_KEY")
                     ?? Environment.GetEnvironmentVariable("key")
-                    ?? throw new InvalidOperationException("Environment variable SCIBOX_API_KEY and key is not set.");
-        _sciBoxClient = new SciBoxClient(token);
+                    ?? throw new InvalidOperationException("Environment variable `SCIBOX_API_KEY` and `key` is not set.");
+        _aiClient = new AiClient(token);
     }
     
     [HttpPost("ask")]
@@ -34,7 +33,7 @@ public class SupportController : ControllerBase
         ResponseDto? response = null;
         try
         {
-            var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
+            var gen = new RecommendationsGenerator(_db.BankFaqs, _aiClient);
             var recommendations = await gen.GetRecommendations(dto.Message);
 
             response = new ResponseDto(recommendations);
@@ -51,7 +50,7 @@ public class SupportController : ControllerBase
     [HttpPost("fastask")]
     public async Task<IActionResult> FastAsk([FromBody] AskDto dto)
     {
-        var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
+        var gen = new RecommendationsGenerator(_db.BankFaqs, _aiClient);
         var recommendations = await gen.GetRecommendationsFast(dto.Message);
         
         var response = new ResponseDto(recommendations);
@@ -63,10 +62,10 @@ public class SupportController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var faqs = _db.BankFaqs.ToList();
-        var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
+        var gen = new RecommendationsGenerator(_db.BankFaqs, _aiClient);
         
         string message = "Как стать клиентом банка?";
-
+        
         try
         {
             var startWaiting = DateTime.UtcNow;
@@ -79,6 +78,50 @@ public class SupportController : ControllerBase
             Logger.LogError(e, "Ошибка при получении ответов от LLM");
             return Ok($"Ошибка при получении ответов от LLM: {e.Message}");
         }
+        // if (!_aiClient.IsMistral) return Ok();
+        // try
+        // {
+        //     int total = await _db.BankFaqs.CountAsync();
+        //     int current = 0;
+        //
+        //     await foreach (var faq in _db.BankFaqs)
+        //     {
+        //         bool success = false;
+        //         while (!success)
+        //         {
+        //             try
+        //             {
+        //                 if (string.IsNullOrEmpty(faq.ExampleMistralEmbedding))
+        //                 {
+        //                     faq.ExampleMistralEmbedding = await _aiClient.GetEmbeddingAsync(faq.ExampleQuestion);
+        //                 }
+        //
+        //                 current++;
+        //                 double percent = (double)current / total * 100;
+        //                 Console.WriteLine($"[{current}/{total}] ({percent:F1}%) {faq.ExampleQuestion}");
+        //     
+        //                 success = true;
+        //             }
+        //             catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("429"))
+        //             {
+        //                 Console.WriteLine($"429 Too Many Requests. Waiting 10s for: {faq.ExampleQuestion}");
+        //                 await Task.Delay(10000);
+        //             }
+        //         }
+        //     }
+
+
+        // }
+        // catch (Exception ex)
+        // {
+        //     Console.WriteLine(ex);
+        // }
+        // finally
+        // {
+        //     await _db.SaveChangesAsync();
+        // }
+        //
+        // return await Task.FromResult(Ok());
     }
     [HttpPost("template")]
     public async Task<IActionResult> SaveTemplate([FromBody] TemplateDto dto)
@@ -93,13 +136,13 @@ public class SupportController : ControllerBase
             .Distinct()
             .ToListAsync();
         
-        var gen = new RecommendationsGenerator(_db.BankFaqs, _sciBoxClient);
+        var gen = new RecommendationsGenerator(_db.BankFaqs, _aiClient);
         var (mainCategory, targetAudience) = await gen.GetEntitiesAsync(mainCategories, targetAudiences, dto.Question);
         if (mainCategory == null)
         {
             return StatusCode(500);
         }
-        var save = new SaveNewItemToDb(_db.BankFaqs, dto.Answer, dto.Question, mainCategory, targetAudience, _sciBoxClient);
+        var save = new SaveNewItemToDb(_db.BankFaqs, dto.Answer, dto.Question, mainCategory, targetAudience, _aiClient);
         await save.AnalysisAndSave();
         await _db.SaveChangesAsync();
         return await Task.FromResult(Ok(save));
