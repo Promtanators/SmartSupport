@@ -8,6 +8,7 @@ public class AiClient
 {
     private const string SciBoxApiUrl = "https://llm.t1v.scibox.tech";
     private const string DefaultSciBoxModel = "Qwen2.5-72B-Instruct-AWQ";
+    private const string DefaultSciBoxEmbed = "bge-m3";
     
     private const string MistralApiUrl = "https://api.mistral.ai";
     private const string DefaultMistralModel = "mistral-small-latest";
@@ -35,7 +36,7 @@ public class AiClient
             IsMistral = false;
             _apiBaseUrl = SciBoxApiUrl;
             ModelName = DefaultSciBoxModel;
-            EmbedModelName = DefaultSciBoxModel;
+            EmbedModelName = DefaultSciBoxEmbed;
         }
         else
         {
@@ -69,7 +70,7 @@ public class AiClient
 
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-
+        
         var response = await _httpClient.PostAsync($"{_apiBaseUrl}/v1/embeddings ", content);
         response.EnsureSuccessStatusCode();
         

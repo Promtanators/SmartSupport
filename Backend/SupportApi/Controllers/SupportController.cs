@@ -61,67 +61,67 @@ public class SupportController : ControllerBase
     [HttpGet("all")]
     public async Task<IActionResult> GetAll()
     {
-        // var faqs = _db.BankFaqs.ToList();
-        // var gen = new RecommendationsGenerator(_db.BankFaqs, _aiClient);
-        //
-        // string message = "Как стать клиентом банка?";
-        //
-        // try
-        // {
-        //     var startWaiting = DateTime.UtcNow;
-        //     var recommendations = await gen.GetRecommendations(message);
-        //     Logger.LogInformation($"Общее время: {(DateTime.UtcNow - startWaiting).Seconds}c");
-        //     return Ok(recommendations);
-        // }
-        // catch (Exception e)
-        // {
-        //     Logger.LogError(e, "Ошибка при получении ответов от LLM");
-        //     return Ok($"Ошибка при получении ответов от LLM: {e.Message}");
-        // }
-        if (!_aiClient.IsMistral) return Ok();
+        var faqs = _db.BankFaqs.ToList();
+        var gen = new RecommendationsGenerator(_db.BankFaqs, _aiClient);
+        
+        string message = "Как стать клиентом банка?";
+        
         try
         {
-            int total = await _db.BankFaqs.CountAsync();
-            int current = 0;
-
-            await foreach (var faq in _db.BankFaqs)
-            {
-                bool success = false;
-                while (!success)
-                {
-                    try
-                    {
-                        if (string.IsNullOrEmpty(faq.ExampleMistralEmbedding))
-                        {
-                            faq.ExampleMistralEmbedding = await _aiClient.GetEmbeddingAsync(faq.ExampleQuestion);
-                        }
-
-                        current++;
-                        double percent = (double)current / total * 100;
-                        Console.WriteLine($"[{current}/{total}] ({percent:F1}%) {faq.ExampleQuestion}");
-            
-                        success = true;
-                    }
-                    catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("429"))
-                    {
-                        Console.WriteLine($"429 Too Many Requests. Waiting 10s for: {faq.ExampleQuestion}");
-                        await Task.Delay(10000);
-                    }
-                }
-            }
-
-
+            var startWaiting = DateTime.UtcNow;
+            var recommendations = await gen.GetRecommendations(message);
+            Logger.LogInformation($"Общее время: {(DateTime.UtcNow - startWaiting).Seconds}c");
+            return Ok(recommendations);
         }
-        catch (Exception ex)
+        catch (Exception e)
         {
-            Console.WriteLine(ex);
+            Logger.LogError(e, "Ошибка при получении ответов от LLM");
+            return Ok($"Ошибка при получении ответов от LLM: {e.Message}");
         }
-        finally
-        {
-            await _db.SaveChangesAsync();
-        }
+        // if (!_aiClient.IsMistral) return Ok();
+        // try
+        // {
+        //     int total = await _db.BankFaqs.CountAsync();
+        //     int current = 0;
+        //
+        //     await foreach (var faq in _db.BankFaqs)
+        //     {
+        //         bool success = false;
+        //         while (!success)
+        //         {
+        //             try
+        //             {
+        //                 if (string.IsNullOrEmpty(faq.ExampleMistralEmbedding))
+        //                 {
+        //                     faq.ExampleMistralEmbedding = await _aiClient.GetEmbeddingAsync(faq.ExampleQuestion);
+        //                 }
+        //
+        //                 current++;
+        //                 double percent = (double)current / total * 100;
+        //                 Console.WriteLine($"[{current}/{total}] ({percent:F1}%) {faq.ExampleQuestion}");
+        //     
+        //                 success = true;
+        //             }
+        //             catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("429"))
+        //             {
+        //                 Console.WriteLine($"429 Too Many Requests. Waiting 10s for: {faq.ExampleQuestion}");
+        //                 await Task.Delay(10000);
+        //             }
+        //         }
+        //     }
 
-        return await Task.FromResult(Ok());
+
+        // }
+        // catch (Exception ex)
+        // {
+        //     Console.WriteLine(ex);
+        // }
+        // finally
+        // {
+        //     await _db.SaveChangesAsync();
+        // }
+        //
+        // return await Task.FromResult(Ok());
     }
     [HttpPost("template")]
     public async Task<IActionResult> SaveTemplate([FromBody] TemplateDto dto)
