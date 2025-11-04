@@ -282,7 +282,7 @@ docker compose up -d --build
 - **Backend:**
     - Максим — [bib.maxim@gmail.com](mailto:bib.maxim@gmail.com), [GitHub](https://github.com/Max2772)
     - Алексей — [boykopovar@gmail.com](mailto:boykopovar@gmail.com), [GitHub](https://github.com/boykopovar)
-    - Эдуард — [kilbas.svetlana1982@gmail.com](mailto:kilbas.svetlana1982@gmail.com), [GitHub](https://github.com/UterSt)
+    - Эдуард — [kilbas.eduard@gmail.com](mailto:kilbas.eduard@gmail.com), [GitHub](https://github.com/UterSt)
 
 
 <h2 id="additional-materials">Дополнительные материалы 📎</h2>
